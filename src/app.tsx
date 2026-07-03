@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, useApp, useInput, useStdout } from 'ink';
 import { FileList } from './components/FileList.js';
 import { DiffView } from './components/DiffView.js';
@@ -14,15 +14,17 @@ import {
   findHunkAtLine,
 } from './diff/expand.js';
 import type { DisplayLine, HunkExpansion } from './diff/types.js';
+import { watchRepo } from './watch/repoWatcher.js';
 
 type Focus = 'files' | 'diff';
 
 type Props = {
   initialSnapshot: DiffSnapshot;
   cwd: string;
+  watch: boolean;
 };
 
-export function App({ initialSnapshot, cwd }: Props) {
+export function App({ initialSnapshot, cwd, watch }: Props) {
   const { exit } = useApp();
   const { stdout } = useStdout();
   const theme = useMemo(() => getTheme(), []);
@@ -37,6 +39,12 @@ export function App({ initialSnapshot, cwd }: Props) {
   const [displayLines, setDisplayLines] = useState<DisplayLine[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loadingDiff, setLoadingDiff] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const selectedPathRef = useRef<string | undefined>(initialSnapshot.files[0]?.path);
+  const refreshingRef = useRef(false);
+  const modeRef = useRef(initialSnapshot.mode);
+  modeRef.current = snapshot.mode;
 
   const columns = stdout.columns ?? 80;
   const rows = stdout.rows ?? 24;
@@ -46,16 +54,39 @@ export function App({ initialSnapshot, cwd }: Props) {
 
   const selectedFile = snapshot.files[selectedIndex];
 
+  useEffect(() => {
+    selectedPathRef.current = selectedFile?.path;
+  }, [selectedFile?.path]);
+
   const refresh = useCallback(async () => {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true;
+    setRefreshing(true);
     try {
       setError(null);
-      const next = await loadDiffSnapshot(cwd, snapshot.mode);
+      const prevPath = selectedPathRef.current;
+      const next = await loadDiffSnapshot(cwd, modeRef.current);
       setSnapshot(next);
-      setSelectedIndex((i) => Math.min(i, Math.max(0, next.files.length - 1)));
+      if (prevPath) {
+        const idx = next.files.findIndex((f) => f.path === prevPath);
+        setSelectedIndex((i) => (idx >= 0 ? idx : Math.min(i, Math.max(0, next.files.length - 1))));
+      } else {
+        setSelectedIndex((i) => Math.min(i, Math.max(0, next.files.length - 1)));
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      refreshingRef.current = false;
+      setRefreshing(false);
     }
-  }, [cwd, snapshot.mode]);
+  }, [cwd]);
+
+  useEffect(() => {
+    if (!watch) return;
+    return watchRepo(snapshot.repoRoot, () => {
+      void refresh();
+    });
+  }, [watch, snapshot.repoRoot, refresh]);
 
   useEffect(() => {
     setExpansions(new Map());
@@ -208,6 +239,8 @@ export function App({ initialSnapshot, cwd }: Props) {
         error={error}
         theme={theme}
         width={columns}
+        watching={watch}
+        refreshing={refreshing}
       />
     </Box>
   );

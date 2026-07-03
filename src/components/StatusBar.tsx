@@ -8,6 +8,8 @@ type Props = {
   error: string | null;
   theme: Theme;
   width: number;
+  watching?: boolean;
+  refreshing?: boolean;
 };
 
 export function StatusBar({
@@ -17,6 +19,8 @@ export function StatusBar({
   error,
   theme,
   width,
+  watching = false,
+  refreshing = false,
 }: Props) {
   const focusLabel = focus === 'files' ? 'files' : 'diff';
   const keys =
@@ -33,6 +37,7 @@ export function StatusBar({
     <Box width={width}>
       <Text color={theme.statusFg} dimColor>
         [{modeLabel}] focus:{focusLabel}
+        {watching ? (refreshing ? ' ⟳' : ' ●') : ''}
         {filePath ? ` ${truncatedPath}` : ''} | {keys}
         {error ? ` | ERR: ${error}` : ''}
       </Text>

@@ -16,12 +16,14 @@ async function main() {
       '--include-uncommitted',
       'With --base, also include uncommitted working tree changes',
     )
+    .option('--no-watch', 'Disable automatic refresh on file changes')
     .parse(process.argv);
 
   const opts = program.opts<{
     staged?: boolean;
     base?: string;
     includeUncommitted?: boolean;
+    noWatch?: boolean;
   }>();
 
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
@@ -55,7 +57,7 @@ async function main() {
     process.exit(1);
   }
 
-  render(<App initialSnapshot={snapshot} cwd={process.cwd()} />);
+  render(<App initialSnapshot={snapshot} cwd={process.cwd()} watch={!opts.noWatch} />);
 }
 
 main().catch((err) => {

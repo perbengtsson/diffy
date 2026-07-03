@@ -17,7 +17,10 @@ diffy                              # all uncommitted changes
 diffy --staged                     # staged only
 diffy --base main                  # branch diff vs main
 diffy --base origin/main --include-uncommitted
+diffy --no-watch                     # disable auto-refresh
 ```
+
+Watching is on by default: diffy refreshes when files change or when you stage/unstage (`●` in the status bar, `⟳` while refreshing).
 
 ## Keys
 
