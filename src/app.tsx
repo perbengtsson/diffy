@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Box, useApp, useInput, useStdout } from 'ink';
 import { FileList } from './components/FileList.js';
 import { DiffView } from './components/DiffView.js';

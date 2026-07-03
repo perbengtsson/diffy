@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { git, gitOrThrow, findRepoRoot } from './runner.js';
+import { gitOrThrow, gitDiffOutput, findRepoRoot } from './runner.js';
 import type {
   DiffFile,
   DiffMode,
@@ -26,7 +26,7 @@ function isBinaryDiff(rawDiff: string): boolean {
   return rawDiff.includes('Binary files') || rawDiff.includes('GIT binary patch');
 }
 
-function statusFromDiff(rawDiff: string, path: string): FileStatus {
+function statusFromDiff(rawDiff: string): FileStatus {
   if (rawDiff.includes('new file mode')) return 'added';
   if (rawDiff.includes('deleted file mode')) return 'deleted';
   if (rawDiff.includes('rename from') || rawDiff.includes('rename to')) return 'renamed';
@@ -46,12 +46,14 @@ async function diffUntrackedFile(
   path: string,
 ): Promise<string> {
   const abs = join(repoRoot, path);
-  const { stdout, stderr } = await git(
+  const raw = await gitDiffOutput(
     ['diff', '--no-index', '-U' + String(CONTEXT_LINES), '/dev/null', abs],
     repoRoot,
   );
-  const raw = stdout || stderr;
-  return raw.replace(/^diff --git a\/dev\/null b\/(.+)$/m, `diff --git a/${path} b/${path}`);
+  return raw.replace(
+    /^diff --git a\/dev\/null b\/(.+)$/m,
+    `diff --git a/${path} b/${path}`,
+  );
 }
 
 async function getUncommittedFiles(
@@ -61,7 +63,7 @@ async function getUncommittedFiles(
   const fileMap = new Map<string, { staged?: string; unstaged?: string; untracked?: boolean }>();
 
   if (!stagedOnly) {
-    const unstagedOut = await gitOrThrow(['diff', '--name-only'], repoRoot);
+    const unstagedOut = await gitDiffOutput(['diff', '--name-only'], repoRoot);
     for (const p of unstagedOut.split('\n').filter(Boolean)) {
       fileMap.set(p, { ...(fileMap.get(p) ?? {}), unstaged: p });
     }
@@ -70,7 +72,7 @@ async function getUncommittedFiles(
     }
   }
 
-  const stagedOut = await gitOrThrow(['diff', '--cached', '--name-only'], repoRoot);
+  const stagedOut = await gitDiffOutput(['diff', '--cached', '--name-only'], repoRoot);
   for (const p of stagedOut.split('\n').filter(Boolean)) {
     fileMap.set(p, { ...(fileMap.get(p) ?? {}), staged: p });
   }
@@ -85,14 +87,14 @@ async function getUncommittedFiles(
     } else {
       const parts: string[] = [];
       if (entry.staged) {
-        const staged = await gitOrThrow(
+        const staged = await gitDiffOutput(
           ['diff', '-U' + String(CONTEXT_LINES), '--cached', '--', path],
           repoRoot,
         );
         if (staged) parts.push(staged);
       }
       if (entry.unstaged && !stagedOnly) {
-        const unstaged = await gitOrThrow(
+        const unstaged = await gitDiffOutput(
           ['diff', '-U' + String(CONTEXT_LINES), '--', path],
           repoRoot,
         );
@@ -105,7 +107,7 @@ async function getUncommittedFiles(
     const binary = isBinaryDiff(rawDiff);
     files.push({
       path,
-      status: entry.untracked ? 'untracked' : statusFromDiff(rawDiff, path),
+      status: entry.untracked ? 'untracked' : statusFromDiff(rawDiff),
       additions: stats.additions,
       deletions: stats.deletions,
       rawDiff,
@@ -122,7 +124,7 @@ async function getBaseDiffFiles(
   base: string,
   includeUncommitted: boolean,
 ): Promise<DiffFile[]> {
-  const committedDiff = await gitOrThrow(
+  const committedDiff = await gitDiffOutput(
     ['diff', '-U' + String(CONTEXT_LINES), `${base}...HEAD`],
     repoRoot,
   );
@@ -143,22 +145,22 @@ async function getBaseDiffFiles(
   const files: DiffFile[] = [];
   for (const path of [...filePaths].sort()) {
     let rawDiff = '';
-    const committedPart = await git(
+    const committedPart = await gitDiffOutput(
       ['diff', '-U' + String(CONTEXT_LINES), `${base}...HEAD`, '--', path],
       repoRoot,
     );
-    rawDiff = committedPart.stdout;
+    rawDiff = committedPart;
 
     if (includeUncommitted) {
-      const staged = await git(
+      const staged = await gitDiffOutput(
         ['diff', '-U' + String(CONTEXT_LINES), '--cached', '--', path],
         repoRoot,
       );
-      const unstaged = await git(
+      const unstaged = await gitDiffOutput(
         ['diff', '-U' + String(CONTEXT_LINES), '--', path],
         repoRoot,
       );
-      const parts = [rawDiff, staged.stdout, unstaged.stdout].filter(Boolean);
+      const parts = [rawDiff, staged, unstaged].filter(Boolean);
       rawDiff = parts.join('\n');
 
       const isUntracked = (await listUntracked(repoRoot)).includes(path);
@@ -172,7 +174,7 @@ async function getBaseDiffFiles(
     const stats = countStats(rawDiff);
     files.push({
       path,
-      status: statusFromDiff(rawDiff, path),
+      status: statusFromDiff(rawDiff),
       additions: stats.additions,
       deletions: stats.deletions,
       rawDiff,

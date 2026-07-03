@@ -1,4 +1,3 @@
-import React from 'react';
 import { Box, Text } from 'ink';
 import type { DisplayLine } from '../diff/types.js';
 import type { Theme } from '../theme.js';

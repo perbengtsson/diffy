@@ -6,11 +6,6 @@ import { loadDiffSnapshot } from './git/diff.js';
 import { findRepoRoot } from './git/runner.js';
 
 async function main() {
-  if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    console.error('diffy requires an interactive terminal (TTY).');
-    process.exit(1);
-  }
-
   const program = new Command();
   program
     .name('diffy')
@@ -28,6 +23,11 @@ async function main() {
     base?: string;
     includeUncommitted?: boolean;
   }>();
+
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.error('diffy requires an interactive terminal (TTY).');
+    process.exit(1);
+  }
 
   if (opts.staged && opts.base) {
     console.error('Cannot use --staged together with --base.');
