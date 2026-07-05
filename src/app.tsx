@@ -3,6 +3,7 @@ import { Box, useApp, useInput } from 'ink';
 import { FileList } from './components/FileList.js';
 import { FileSummary, fileSummaryHeight } from './components/FileSummary.js';
 import { DiffView } from './components/DiffView.js';
+import { SearchBar } from './components/SearchBar.js';
 import { StatusBar } from './components/StatusBar.js';
 import { getTheme } from './theme.js';
 import type { DiffMode, DiffSnapshot } from './git/types.js';
@@ -30,11 +31,14 @@ import {
   findFirstEditedIndex,
   findRowIndexForPath,
   flattenFileTree,
+  expandDirsForPath,
   isEditedFile,
   pruneCollapsedDirs,
   toggleDirCollapsed,
 } from './files/tree.js';
 import { buildChangeSummary } from './files/summary.js';
+import { findAllFileMatches, findLineMatches } from './search/search.js';
+import type { SearchMatch, SearchScope } from './search/types.js';
 
 type Focus = 'files' | 'diff';
 
@@ -68,6 +72,14 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [loadingDiff, setLoadingDiff] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchScope, setSearchScope] = useState<SearchScope>('file');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchMatchIndex, setSearchMatchIndex] = useState(0);
+  const [allSearchMatches, setAllSearchMatches] = useState<SearchMatch[]>([]);
+  const [allSearchLoading, setAllSearchLoading] = useState(false);
+
+  const pendingSearchMatchRef = useRef<SearchMatch | null>(null);
 
   const selectedPathRef = useRef<string | undefined>(
     initialSnapshot.files[findFirstEditedIndex(initialSnapshot.files)]?.path,
@@ -76,7 +88,7 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
   const modeRef = useRef(initialSnapshot.mode);
   modeRef.current = snapshot.mode;
 
-  const filePaneWidth = Math.max(20, Math.min(32, Math.floor(columns * 0.28)));
+  const filePaneWidth = Math.max(25, Math.min(37, Math.floor(columns * 0.28) + 5));
   const diffPaneWidth = Math.max(30, columns - filePaneWidth - 1);
   const contentHeight = Math.max(5, rows - 2);
 
@@ -148,7 +160,7 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
   useEffect(() => {
     if (!selectedFile?.path) return;
     setFileRowIndex(findRowIndexForPath(visibleFileRows, selectedFile.path));
-  }, [selectedFile?.path]);
+  }, [selectedFile?.path, visibleFileRows]);
 
   useEffect(() => {
     setExpansions(new Map());
@@ -211,6 +223,150 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
   const maxFileScroll = Math.max(0, visibleFileRows.length - fileListHeight);
   const maxDiffScroll = Math.max(0, displayLines.length - contentHeight);
 
+  const fileSearchMatches = useMemo(() => {
+    if (!searchQuery || !selectedFile) return [];
+    return findLineMatches(displayLines, searchQuery, selectedFile.path);
+  }, [displayLines, searchQuery, selectedFile]);
+
+  const searchMatches =
+    searchScope === 'file' ? fileSearchMatches : allSearchMatches;
+
+  const currentFileSearchLines = useMemo(() => {
+    if (!searchOpen || !searchQuery || !selectedFile) return undefined;
+    if (searchScope === 'all') {
+      return new Set(
+        allSearchMatches
+          .filter((match) => match.filePath === selectedFile.path)
+          .map((match) => match.lineIndex),
+      );
+    }
+    return new Set(fileSearchMatches.map((match) => match.lineIndex));
+  }, [
+    allSearchMatches,
+    fileSearchMatches,
+    searchOpen,
+    searchQuery,
+    searchScope,
+    selectedFile,
+  ]);
+
+  const activeSearchLine =
+    searchOpen &&
+    searchQuery &&
+    searchMatches.length > 0 &&
+    selectedFile?.path === searchMatches[searchMatchIndex]?.filePath
+      ? searchMatches[searchMatchIndex]?.lineIndex
+      : undefined;
+
+  useEffect(() => {
+    if (!searchOpen || searchScope !== 'all' || !searchQuery) {
+      setAllSearchMatches([]);
+      setAllSearchLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setAllSearchLoading(true);
+    findAllFileMatches(
+      treeFiles,
+      snapshot.mode,
+      snapshot.repoRoot,
+      searchQuery,
+      expansions,
+    )
+      .then((matches) => {
+        if (!cancelled) {
+          setAllSearchMatches(matches);
+          setAllSearchLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAllSearchMatches([]);
+          setAllSearchLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    searchOpen,
+    searchScope,
+    searchQuery,
+    treeFiles,
+    snapshot.mode,
+    snapshot.repoRoot,
+    expansions,
+  ]);
+
+  useEffect(() => {
+    setSearchMatchIndex(0);
+  }, [searchQuery, searchScope]);
+
+  useEffect(() => {
+    setSearchMatchIndex((index) =>
+      searchMatches.length === 0 ? 0 : Math.min(index, searchMatches.length - 1),
+    );
+  }, [searchMatches.length]);
+
+  const scrollToLine = useCallback(
+    (lineIndex: number) => {
+      setCursorLine(lineIndex);
+      setDiffScroll((scroll) => {
+        if (lineIndex < scroll) return lineIndex;
+        if (lineIndex >= scroll + contentHeight) {
+          return Math.min(maxDiffScroll, lineIndex - contentHeight + 1);
+        }
+        return scroll;
+      });
+      setFocus('diff');
+    },
+    [contentHeight, maxDiffScroll],
+  );
+
+  const goToSearchMatch = useCallback(
+    (match: SearchMatch | undefined) => {
+      if (!match) return;
+
+      if (match.filePath !== selectedFile?.path) {
+        pendingSearchMatchRef.current = match;
+        const idx = snapshot.files.findIndex((file) => file.path === match.filePath);
+        if (idx < 0) return;
+        setSelectedIndex(idx);
+        setCollapsedDirs((prev) => expandDirsForPath(prev, match.filePath));
+        setFocus('diff');
+        return;
+      }
+
+      scrollToLine(match.lineIndex);
+    },
+    [scrollToLine, selectedFile?.path, snapshot.files],
+  );
+
+  useEffect(() => {
+    const pending = pendingSearchMatchRef.current;
+    if (!pending || loadingDiff) return;
+    if (selectedFile?.path !== pending.filePath || displayLines.length === 0) return;
+    pendingSearchMatchRef.current = null;
+    scrollToLine(pending.lineIndex);
+  }, [displayLines, loadingDiff, scrollToLine, selectedFile?.path]);
+
+  useEffect(() => {
+    if (!searchOpen || !searchQuery || searchMatches.length === 0) return;
+    if (searchScope === 'all' && allSearchLoading) return;
+    if (pendingSearchMatchRef.current) return;
+    goToSearchMatch(searchMatches[searchMatchIndex]);
+  }, [
+    allSearchLoading,
+    goToSearchMatch,
+    searchMatchIndex,
+    searchMatches,
+    searchOpen,
+    searchQuery,
+    searchScope,
+  ]);
+
   useEffect(() => {
     setFileScroll((s) => Math.min(s, maxFileScroll));
     setDiffScroll((s) => Math.min(s, maxDiffScroll));
@@ -256,8 +412,85 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
 
   useMouse(handleFileClick);
 
+  const openSearch = useCallback((scope: SearchScope) => {
+    setSearchScope(scope);
+    setSearchOpen(true);
+    setSearchQuery('');
+    setSearchMatchIndex(0);
+    setAllSearchMatches([]);
+    setFocus('diff');
+  }, []);
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery('');
+    setSearchMatchIndex(0);
+    setAllSearchMatches([]);
+    pendingSearchMatchRef.current = null;
+  }, []);
+
+  const stepSearchMatch = useCallback(
+    (direction: 1 | -1) => {
+      if (searchMatches.length === 0) return;
+      setSearchMatchIndex((index) => {
+        const next = (index + direction + searchMatches.length) % searchMatches.length;
+        return next;
+      });
+    },
+    [searchMatches.length],
+  );
+
   useInput((input, key) => {
     if (input.startsWith('\x1b[<')) return;
+
+    const isFindKey = input === 'f' || input === 'F';
+
+    if (key.meta && isFindKey) {
+      openSearch('all');
+      return;
+    }
+
+    if (key.ctrl && key.shift && (isFindKey || input === '')) {
+      openSearch('all');
+      return;
+    }
+
+    if (key.ctrl && isFindKey) {
+      openSearch('file');
+      return;
+    }
+
+    if (searchOpen) {
+      if (key.tab) {
+        setSearchScope((scope) => (scope === 'file' ? 'all' : 'file'));
+        return;
+      }
+      if (key.escape) {
+        closeSearch();
+        return;
+      }
+      if (key.return) {
+        stepSearchMatch(1);
+        return;
+      }
+      if (input === 'n' && !key.ctrl && !key.meta) {
+        stepSearchMatch(1);
+        return;
+      }
+      if (input === 'N') {
+        stepSearchMatch(-1);
+        return;
+      }
+      if (key.backspace || key.delete) {
+        setSearchQuery((query) => query.slice(0, -1));
+        return;
+      }
+      if (input.length === 1 && !key.ctrl && !key.meta && input >= ' ') {
+        setSearchQuery((query) => query + input);
+        return;
+      }
+      return;
+    }
 
     if (input === 'q' || (key.ctrl && input === 'c')) {
       exit();
@@ -399,9 +632,12 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
           cursorLine={cursorLine}
           height={contentHeight}
           width={diffPaneWidth}
-          focused={focus === 'diff'}
+          focused={focus === 'diff' && !searchOpen}
           theme={theme}
           highlightCache={highlightCache ?? undefined}
+          searchQuery={searchOpen ? searchQuery : undefined}
+          searchMatchLines={currentFileSearchLines}
+          activeSearchLine={activeSearchLine}
           emptyMessage={
             selectedFile && !isEditedFile(selectedFile)
               ? 'No changes'
@@ -409,16 +645,28 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
           }
         />
       </Box>
-      <StatusBar
-        modeLabel={snapshot.modeLabel}
-        focus={focus}
-        filePath={selectedFile?.path ?? ''}
-        error={error}
-        theme={theme}
-        width={columns}
-        watching={watch}
-        refreshing={refreshing}
-      />
+      {searchOpen ? (
+        <SearchBar
+          query={searchQuery}
+          scope={searchScope}
+          matchIndex={searchMatchIndex}
+          matchCount={searchMatches.length}
+          loading={searchScope === 'all' && allSearchLoading}
+          theme={theme}
+          width={columns}
+        />
+      ) : (
+        <StatusBar
+          modeLabel={snapshot.modeLabel}
+          focus={focus}
+          filePath={selectedFile?.path ?? ''}
+          error={error}
+          theme={theme}
+          width={columns}
+          watching={watch}
+          refreshing={refreshing}
+        />
+      )}
     </Box>
   );
 }

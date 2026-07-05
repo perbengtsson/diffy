@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Box, Text } from 'ink';
 import type { LineHighlightCache } from '../highlight/cache.js';
 import { tokensForLine } from '../highlight/cache.js';
@@ -16,11 +17,26 @@ type Props = {
   focused: boolean;
   theme: Theme;
   highlightCache?: LineHighlightCache;
+  searchQuery?: string;
+  searchMatchLines?: ReadonlySet<number>;
+  activeSearchLine?: number;
   emptyMessage?: string;
 };
 
 const SCROLLBAR_WIDTH = 1;
 const GUTTER_WIDTH = 8;
+type SearchHighlightStyle = { bg: string; fg: string };
+
+const SEARCH_MATCH: SearchHighlightStyle = { bg: 'yellow', fg: 'black' };
+const SEARCH_ACTIVE: SearchHighlightStyle = { bg: 'yellow', fg: 'black' };
+
+function searchStyle(highlight?: 'match' | 'active'): SearchHighlightStyle | undefined {
+  if (highlight === 'active') return SEARCH_ACTIVE;
+  if (highlight === 'match') return SEARCH_MATCH;
+  return undefined;
+}
+
+type RenderToken = HighlightToken & { backgroundColor?: string };
 
 function formatLineNo(n: number | undefined, width: number): string {
   if (n === undefined) return ' '.repeat(width);
@@ -45,37 +61,110 @@ function gutterColor(
   return theme.dimFg;
 }
 
-function renderGutter(line: DisplayLine, theme: Theme, bold: boolean) {
+function findMatchRanges(
+  text: string,
+  query: string,
+): { start: number; end: number }[] {
+  if (!query) return [];
+  const lower = text.toLowerCase();
+  const needle = query.toLowerCase();
+  const ranges: { start: number; end: number }[] = [];
+  let pos = 0;
+  while (pos < lower.length) {
+    const idx = lower.indexOf(needle, pos);
+    if (idx === -1) break;
+    ranges.push({ start: idx, end: idx + needle.length });
+    pos = idx + needle.length;
+  }
+  return ranges;
+}
+
+function mergeRenderTokens(tokens: RenderToken[]): RenderToken[] {
+  const merged: RenderToken[] = [];
+  for (const token of tokens) {
+    const last = merged[merged.length - 1];
+    if (
+      last &&
+      last.color === token.color &&
+      last.backgroundColor === token.backgroundColor
+    ) {
+      last.text += token.text;
+    } else {
+      merged.push({ ...token });
+    }
+  }
+  return merged;
+}
+
+function applySearchHighlight(
+  tokens: HighlightToken[],
+  query: string,
+  style: SearchHighlightStyle,
+  maxWidth: number,
+): RenderToken[] {
+  const truncated = truncateTokens(tokens, maxWidth);
+  if (!query) return truncated;
+
+  const styled: RenderToken[] = [];
+  for (const token of truncated) {
+    for (const ch of token.text) {
+      styled.push({ text: ch, color: token.color });
+    }
+  }
+
+  const text = styled.map((t) => t.text).join('');
+  for (const { start, end } of findMatchRanges(text, query)) {
+    for (let i = start; i < end; i++) {
+      styled[i]!.backgroundColor = style.bg;
+      styled[i]!.color = style.fg;
+    }
+  }
+
+  return mergeRenderTokens(styled);
+}
+
+function renderGutter(
+  line: DisplayLine,
+  theme: Theme,
+  bold: boolean,
+  highlight?: SearchHighlightStyle,
+) {
   return (
     <>
-      <Text bold={bold} color={gutterColor(line, 'old', theme)}>
+      <Text
+        bold={bold}
+        color={highlight ? highlight.fg : gutterColor(line, 'old', theme)}
+        backgroundColor={highlight?.bg}
+      >
         {formatLineNo(line.oldLineNo, 4)}
       </Text>
-      <Text bold={bold} color={gutterColor(line, 'new', theme)}>
+      <Text
+        bold={bold}
+        color={highlight ? highlight.fg : gutterColor(line, 'new', theme)}
+        backgroundColor={highlight?.bg}
+      >
         {formatLineNo(line.newLineNo, 4)}
       </Text>
-      {' '}
+      <Text backgroundColor={highlight?.bg}> </Text>
     </>
   );
 }
 
 function renderTokens(
-  tokens: HighlightToken[],
+  tokens: RenderToken[],
   opts: {
     bold?: boolean;
     backgroundColor?: string;
     defaultColor?: string;
     dimColor?: boolean;
-    contentWidth: number;
   },
 ) {
-  const truncated = truncateTokens(tokens, opts.contentWidth);
-  return truncated.map((token, i) => (
+  return tokens.map((token, i) => (
     <Text
       key={i}
       bold={opts.bold}
       color={token.color ?? opts.defaultColor}
-      backgroundColor={opts.backgroundColor}
+      backgroundColor={token.backgroundColor ?? opts.backgroundColor}
       dimColor={opts.dimColor}
     >
       {token.text}
@@ -83,40 +172,109 @@ function renderTokens(
   ));
 }
 
+function renderTextWithSearch(
+  text: string,
+  query: string,
+  style: SearchHighlightStyle | undefined,
+  props: {
+    bold?: boolean;
+    color?: string;
+    backgroundColor?: string;
+    dimColor?: boolean;
+  },
+) {
+  if (!query || !style) {
+    return <Text {...props}>{text}</Text>;
+  }
+
+  const ranges = findMatchRanges(text, query);
+  if (ranges.length === 0) {
+    return <Text {...props}>{text}</Text>;
+  }
+
+  const parts: ReactNode[] = [];
+  let last = 0;
+  for (const { start, end } of ranges) {
+    if (last < start) {
+      parts.push(
+        <Text key={`pre-${last}`} {...props}>
+          {text.slice(last, start)}
+        </Text>,
+      );
+    }
+    parts.push(
+      <Text
+        key={`match-${start}`}
+        bold={props.bold}
+        color={style.fg}
+        backgroundColor={style.bg}
+      >
+        {text.slice(start, end)}
+      </Text>,
+    );
+    last = end;
+  }
+  if (last < text.length) {
+    parts.push(
+      <Text key={`post-${last}`} {...props}>
+        {text.slice(last)}
+      </Text>,
+    );
+  }
+  return <>{parts}</>;
+}
+
 function renderLineContent(
   line: DisplayLine,
   theme: Theme,
   contentWidth: number,
   highlightCache: LineHighlightCache | undefined,
+  searchQuery: string | undefined,
+  searchHighlight?: 'match' | 'active',
 ) {
   const tokens = tokensForLine(line, highlightCache);
   const bold = !isUneditedLine(line.kind);
+  const highlight = searchStyle(searchHighlight);
+  const diffBg =
+    line.kind === 'add'
+      ? theme.addedBg
+      : line.kind === 'delete'
+        ? theme.removedBg
+        : undefined;
 
   if (tokens) {
     switch (line.kind) {
       case 'add':
-        return renderTokens(tokens, {
-          bold,
-          backgroundColor: theme.addedBg,
-          contentWidth,
-        });
+        return renderTokens(
+          highlight && searchQuery
+            ? applySearchHighlight(tokens, searchQuery, highlight, contentWidth)
+            : truncateTokens(tokens, contentWidth),
+          { bold, backgroundColor: diffBg },
+        );
       case 'delete':
-        return renderTokens(tokens, {
-          bold,
-          backgroundColor: theme.removedBg,
-          contentWidth,
-        });
+        return renderTokens(
+          highlight && searchQuery
+            ? applySearchHighlight(tokens, searchQuery, highlight, contentWidth)
+            : truncateTokens(tokens, contentWidth),
+          { bold, backgroundColor: diffBg },
+        );
       case 'expanded-context':
-        return renderTokens(tokens, {
-          defaultColor: theme.expandedContextFg,
-          dimColor: true,
-          contentWidth,
-        });
+        return renderTokens(
+          highlight && searchQuery
+            ? applySearchHighlight(tokens, searchQuery, highlight, contentWidth)
+            : truncateTokens(tokens, contentWidth),
+          {
+            defaultColor: theme.expandedContextFg,
+            dimColor: true,
+          },
+        );
       case 'context':
-        return renderTokens(tokens, {
-          defaultColor: theme.contextFg,
-          contentWidth,
-        });
+        return renderTokens(
+          highlight && searchQuery
+            ? applySearchHighlight(tokens, searchQuery, highlight, contentWidth)
+            : truncateTokens(tokens, contentWidth),
+          { defaultColor: theme.contextFg },
+        );
     }
   }
 
@@ -126,35 +284,42 @@ function renderLineContent(
 
   switch (line.kind) {
     case 'add':
-      return (
-        <Text bold backgroundColor={theme.addedBg}>
-          {text}
-        </Text>
-      );
+      return renderTextWithSearch(text, searchQuery ?? '', highlight, {
+        bold,
+        backgroundColor: diffBg,
+      });
     case 'delete':
-      return (
-        <Text bold backgroundColor={theme.removedBg}>
-          {text}
-        </Text>
-      );
+      return renderTextWithSearch(text, searchQuery ?? '', highlight, {
+        bold,
+        backgroundColor: diffBg,
+      });
     case 'expanded-context':
-      return (
-        <Text color={theme.expandedContextFg} dimColor>
-          {text}
-        </Text>
-      );
+      return renderTextWithSearch(text, searchQuery ?? '', highlight, {
+        color: theme.expandedContextFg,
+        dimColor: true,
+      });
     case 'hunk-header':
-      return <Text bold color={theme.hunkHeaderFg}>{line.content}</Text>;
-    case 'file-header':
-      return <Text bold color={theme.dimFg}>{line.content}</Text>;
-    case 'binary':
-      return <Text bold color={theme.dimFg}>{line.content}</Text>;
-    default:
       return (
-        <Text color={theme.contextFg}>
-          {text}
+        <Text bold color={theme.hunkHeaderFg}>
+          {line.content}
         </Text>
       );
+    case 'file-header':
+      return (
+        <Text bold color={theme.dimFg}>
+          {line.content}
+        </Text>
+      );
+    case 'binary':
+      return (
+        <Text bold color={theme.dimFg}>
+          {line.content}
+        </Text>
+      );
+    default:
+      return renderTextWithSearch(text, searchQuery ?? '', highlight, {
+        color: theme.contextFg,
+      });
   }
 }
 
@@ -167,6 +332,9 @@ export function DiffView({
   focused,
   theme,
   highlightCache,
+  searchQuery,
+  searchMatchLines,
+  activeSearchLine,
   emptyMessage = 'Select a file to view its diff',
 }: Props) {
   const innerHeight = Math.max(1, height);
@@ -188,16 +356,39 @@ export function DiffView({
             {visible.map((line, i) => {
               const absoluteIndex = scrollOffset + i;
               const atCursor = focused && absoluteIndex === cursorLine;
+              const isSearchMatch = searchMatchLines?.has(absoluteIndex) ?? false;
+              const isActiveSearch = activeSearchLine === absoluteIndex;
+              const searchHighlight = isActiveSearch
+                ? 'active'
+                : isSearchMatch
+                  ? 'match'
+                  : undefined;
+              const highlightStyle = searchStyle(searchHighlight);
               const bold = !isUneditedLine(line.kind);
               return (
                 <Box key={absoluteIndex} paddingX={1}>
                   <Text
                     bold={bold}
-                    backgroundColor={atCursor ? theme.borderFg : undefined}
-                    color={atCursor ? theme.selectedFg : undefined}
+                    backgroundColor={
+                      atCursor && searchHighlight === undefined
+                        ? theme.borderFg
+                        : undefined
+                    }
+                    color={
+                      atCursor && searchHighlight === undefined
+                        ? theme.selectedFg
+                        : undefined
+                    }
                   >
-                    {renderGutter(line, theme, bold)}
-                    {renderLineContent(line, theme, contentWidth, highlightCache)}
+                    {renderGutter(line, theme, bold, highlightStyle)}
+                    {renderLineContent(
+                      line,
+                      theme,
+                      contentWidth,
+                      highlightCache,
+                      searchQuery,
+                      searchHighlight,
+                    )}
                   </Text>
                 </Box>
               );

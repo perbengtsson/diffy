@@ -145,6 +145,20 @@ export function toggleDirCollapsed(
   return next;
 }
 
+export function expandDirsForPath(
+  collapsedDirs: ReadonlySet<string>,
+  filePath: string,
+): Set<string> {
+  const next = new Set(collapsedDirs);
+  const parts = filePath.split('/');
+  let prefix = '';
+  for (let i = 0; i < parts.length - 1; i++) {
+    prefix = prefix ? `${prefix}/${parts[i]}` : parts[i]!;
+    next.delete(prefix);
+  }
+  return next;
+}
+
 export function pruneCollapsedDirs(
   collapsedDirs: ReadonlySet<string>,
   files: DiffFile[],
