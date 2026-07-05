@@ -10,11 +10,8 @@ type Props = {
   scrollOffset: number;
   height: number;
   width: number;
-  focused: boolean;
   theme: Theme;
-  changedCount: number;
-  totalCount: number;
-  showUnedited: boolean;
+  dirsWithChanges: ReadonlySet<string>;
 };
 
 function statusBadge(status: DiffFile['status']): string {
@@ -46,13 +43,10 @@ export function FileList({
   scrollOffset,
   height,
   width,
-  focused,
   theme,
-  changedCount,
-  totalCount,
-  showUnedited,
+  dirsWithChanges,
 }: Props) {
-  const innerHeight = Math.max(1, height - 1);
+  const innerHeight = Math.max(1, height);
   const visible = rows.slice(scrollOffset, scrollOffset + innerHeight);
 
   return (
@@ -67,21 +61,6 @@ export function FileList({
       borderRight
       borderColor={theme.borderFg}
     >
-      <Box paddingX={1} width={width - 2} flexDirection="row">
-        <Box flexGrow={1}>
-          <Text bold color={focused ? theme.selectedBg : theme.defaultFg}>
-            Files ({changedCount}
-            {showUnedited ? `/${totalCount}` : ''})
-          </Text>
-        </Box>
-        <Text
-          bold={showUnedited}
-          color={showUnedited ? theme.defaultFg : theme.dimFg}
-          dimColor={!showUnedited}
-        >
-          {showUnedited ? '▾' : '▸'}
-        </Text>
-      </Box>
       {rows.length === 0 ? (
         <Box paddingX={1}>
           <Text bold color={theme.dimFg}>No changes</Text>
@@ -106,27 +85,32 @@ export function FileList({
             width - indent.length - prefix.length - 6,
           );
           const file = row.node.file;
-          const edited = file ? isEditedFile(file) : true;
+          const highlighted =
+            row.node.kind === 'dir'
+              ? dirsWithChanges.has(row.node.path)
+              : file
+                ? isEditedFile(file)
+                : false;
 
           return (
             <Box key={`${row.node.path}:${index}`} paddingX={1}>
               <Text
-                bold={edited || row.node.kind === 'dir'}
+                bold={highlighted}
                 backgroundColor={selected ? theme.selectedBg : undefined}
                 color={
                   selected
                     ? theme.selectedFg
-                    : edited
+                    : highlighted
                       ? theme.defaultFg
                       : theme.dimFg
                 }
-                dimColor={!edited && row.node.kind === 'file' && !selected}
+                dimColor={!highlighted && !selected}
               >
                 {indent}
                 {prefix}
                 {row.node.kind === 'file' && file ? (
                   <>
-                    {edited ? (
+                    {highlighted ? (
                       <>
                         <Text
                           bold
@@ -139,7 +123,7 @@ export function FileList({
                       '   '
                     )}
                     {truncateName(label, labelWidth)}
-                    {edited && (file.additions > 0 || file.deletions > 0) && (
+                    {highlighted && (file.additions > 0 || file.deletions > 0) && (
                       <Text bold color={theme.dimFg}>
                         {' '}
                         {file.additions > 0 && (

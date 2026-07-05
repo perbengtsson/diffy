@@ -73,6 +73,40 @@ function sortTree(nodes: FileTreeNode[]): void {
   }
 }
 
+export function buildDirsWithChanges(files: DiffFile[]): Set<string> {
+  const dirs = new Set<string>();
+  for (const file of files) {
+    if (!isEditedFile(file)) continue;
+    const parts = file.path.split('/');
+    let path = '';
+    for (let i = 0; i < parts.length - 1; i++) {
+      path = path ? `${path}/${parts[i]}` : parts[i]!;
+      dirs.add(path);
+    }
+  }
+  return dirs;
+}
+
+export function buildInitialCollapsedDirs(files: DiffFile[]): Set<string> {
+  const allDirs = new Set<string>();
+  const expandedDirs = buildDirsWithChanges(files);
+
+  for (const file of files) {
+    const parts = file.path.split('/');
+    let path = '';
+    for (let i = 0; i < parts.length - 1; i++) {
+      path = path ? `${path}/${parts[i]}` : parts[i]!;
+      allDirs.add(path);
+    }
+  }
+
+  const collapsed = new Set<string>();
+  for (const dir of allDirs) {
+    if (!expandedDirs.has(dir)) collapsed.add(dir);
+  }
+  return collapsed;
+}
+
 export function flattenFileTree(
   nodes: FileTreeNode[],
   collapsedDirs: ReadonlySet<string>,

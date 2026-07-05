@@ -11,7 +11,6 @@ type Props = {
   width: number;
   focused: boolean;
   theme: Theme;
-  filePath: string;
   emptyMessage?: string;
 };
 
@@ -70,10 +69,9 @@ export function DiffView({
   width,
   focused,
   theme,
-  filePath,
   emptyMessage = 'Select a file to view its diff',
 }: Props) {
-  const innerHeight = Math.max(1, height - 1);
+  const innerHeight = Math.max(1, height);
   const contentWidth = Math.max(
     10,
     width - GUTTER_WIDTH - SCROLLBAR_WIDTH - 4,
@@ -82,12 +80,6 @@ export function DiffView({
 
   return (
     <Box flexDirection="column" width={width} height={height} flexGrow={1}>
-      <Box paddingX={1}>
-        <Text bold color={focused ? theme.selectedBg : theme.defaultFg}>
-          Diff
-        </Text>
-        <Text bold color={theme.dimFg}> — {filePath || '(none)'}</Text>
-      </Box>
       {lines.length === 0 ? (
         <Box paddingX={1}>
           <Text bold color={theme.dimFg}>{emptyMessage}</Text>

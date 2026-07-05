@@ -16,9 +16,12 @@ import {
 import type { DisplayLine, HunkExpansion } from './diff/types.js';
 import { watchRepo } from './watch/repoWatcher.js';
 import { useTerminalSize } from './hooks/useTerminalSize.js';
+import { useMouse } from './hooks/useMouse.js';
+import type { MouseClick } from './mouse/parseMouse.js';
 import {
   buildFileTree,
-  countEditedFiles,
+  buildDirsWithChanges,
+  buildInitialCollapsedDirs,
   findFirstEditedIndex,
   findRowIndexForPath,
   flattenFileTree,
@@ -45,7 +48,9 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
     findFirstEditedIndex(initialSnapshot.files),
   );
   const [fileRowIndex, setFileRowIndex] = useState(0);
-  const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(() => new Set());
+  const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(() =>
+    buildInitialCollapsedDirs(initialSnapshot.files),
+  );
   const [showUnedited, setShowUnedited] = useState(true);
   const [fileScroll, setFileScroll] = useState(0);
   const [diffScroll, setDiffScroll] = useState(0);
@@ -76,6 +81,10 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
     [snapshot.files, showUnedited],
   );
   const fileTree = useMemo(() => buildFileTree(treeFiles), [treeFiles]);
+  const dirsWithChanges = useMemo(
+    () => buildDirsWithChanges(snapshot.files),
+    [snapshot.files],
+  );
   const visibleFileRows = useMemo(
     () => flattenFileTree(fileTree, collapsedDirs),
     [fileTree, collapsedDirs],
@@ -165,15 +174,57 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
     [selectedFile],
   );
 
-  const maxFileScroll = Math.max(0, visibleFileRows.length - (contentHeight - 1));
-  const maxDiffScroll = Math.max(0, displayLines.length - (contentHeight - 1));
+  const maxFileScroll = Math.max(0, visibleFileRows.length - contentHeight);
+  const maxDiffScroll = Math.max(0, displayLines.length - contentHeight);
 
   useEffect(() => {
     setFileScroll((s) => Math.min(s, maxFileScroll));
     setDiffScroll((s) => Math.min(s, maxDiffScroll));
   }, [maxFileScroll, maxDiffScroll]);
 
+  const selectFileRow = useCallback(
+    (nextRow: number, openDiff = false) => {
+      if (nextRow < 0 || nextRow >= visibleFileRows.length) return;
+      setFocus(openDiff ? 'diff' : 'files');
+      setFileRowIndex(nextRow);
+      const row = visibleFileRows[nextRow];
+      if (row?.node.kind === 'file') {
+        const idx = snapshot.files.findIndex((f) => f.path === row.node.path);
+        if (idx >= 0) setSelectedIndex(idx);
+      }
+    },
+    [snapshot.files, visibleFileRows],
+  );
+
+  const handleFileClick = useCallback(
+    (click: MouseClick) => {
+      if (click.x < 1 || click.x > filePaneWidth || click.y < 1 || click.y > contentHeight) {
+        return;
+      }
+
+      const rowIndex = click.y - 1 + fileScroll;
+      if (rowIndex < 0 || rowIndex >= visibleFileRows.length) return;
+
+      const row = visibleFileRows[rowIndex];
+      if (!row) return;
+
+      if (row.node.kind === 'dir') {
+        setFocus('files');
+        setFileRowIndex(rowIndex);
+        setCollapsedDirs((prev) => toggleDirCollapsed(prev, row.node.path));
+        return;
+      }
+
+      selectFileRow(rowIndex, true);
+    },
+    [contentHeight, filePaneWidth, fileScroll, selectFileRow, visibleFileRows],
+  );
+
+  useMouse(handleFileClick);
+
   useInput((input, key) => {
+    if (input.startsWith('\x1b[<')) return;
+
     if (input === 'q' || (key.ctrl && input === 'c')) {
       exit();
       return;
@@ -197,26 +248,21 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
         return;
       }
 
-      const selectFileRow = (nextRow: number) => {
-        setFileRowIndex(nextRow);
-        const row = visibleFileRows[nextRow];
-        if (row?.node.kind === 'file') {
-          const idx = snapshot.files.findIndex((f) => f.path === row.node.path);
-          if (idx >= 0) setSelectedIndex(idx);
-        }
+      const selectRow = (nextRow: number, openDiff = false) => {
+        selectFileRow(nextRow, openDiff);
       };
 
       if (input === 'j' || key.downArrow) {
         if (visibleFileRows.length === 0) return;
         const next = Math.min(visibleFileRows.length - 1, fileRowIndex + 1);
-        selectFileRow(next);
-        if (next >= fileScroll + contentHeight - 1) {
+        selectRow(next);
+        if (next >= fileScroll + contentHeight) {
           setFileScroll((s) => Math.min(maxFileScroll, s + 1));
         }
       } else if (input === 'k' || key.upArrow) {
         if (visibleFileRows.length === 0) return;
         const next = Math.max(0, fileRowIndex - 1);
-        selectFileRow(next);
+        selectRow(next);
         if (next < fileScroll) {
           setFileScroll((s) => Math.max(0, s - 1));
         }
@@ -247,7 +293,7 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
         key.return ||
         (currentRow?.node.kind === 'file' && input === ' ')
       ) {
-        setFocus('diff');
+        selectRow(fileRowIndex, true);
       }
       return;
     }
@@ -256,7 +302,7 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
     if (input === 'j' || key.downArrow) {
       setCursorLine((c) => {
         const next = Math.min(displayLines.length - 1, c + 1);
-        if (next >= diffScroll + contentHeight - 1) {
+        if (next >= diffScroll + contentHeight) {
           setDiffScroll((s) => Math.min(maxDiffScroll, s + 1));
         }
         return next;
@@ -275,7 +321,7 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
     } else if (input === 'G') {
       const last = Math.max(0, displayLines.length - 1);
       setCursorLine(last);
-      setDiffScroll(Math.max(0, displayLines.length - (contentHeight - 1)));
+      setDiffScroll(Math.max(0, displayLines.length - contentHeight));
     } else if (input === 'h' || key.leftArrow) {
       setFocus('files');
     } else if (input === '{' || (key.ctrl && input === 'u')) {
@@ -302,11 +348,8 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
           scrollOffset={fileScroll}
           height={contentHeight}
           width={filePaneWidth}
-          focused={focus === 'files'}
           theme={theme}
-          changedCount={countEditedFiles(snapshot.files)}
-          totalCount={snapshot.files.length}
-          showUnedited={showUnedited}
+          dirsWithChanges={dirsWithChanges}
         />
         <DiffView
           lines={loadingDiff ? [{ kind: 'binary', content: 'Loading…' }] : displayLines}
@@ -316,7 +359,6 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
           width={diffPaneWidth}
           focused={focus === 'diff'}
           theme={theme}
-          filePath={selectedFile?.path ?? ''}
           emptyMessage={
             selectedFile && !isEditedFile(selectedFile)
               ? 'No changes'
