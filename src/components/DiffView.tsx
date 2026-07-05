@@ -1,6 +1,7 @@
 import { Box, Text } from 'ink';
 import type { DisplayLine } from '../diff/types.js';
 import type { Theme } from '../theme.js';
+import { DiffScrollBar } from './DiffScrollBar.js';
 
 type Props = {
   lines: DisplayLine[];
@@ -13,6 +14,9 @@ type Props = {
   filePath: string;
   emptyMessage?: string;
 };
+
+const SCROLLBAR_WIDTH = 1;
+const GUTTER_WIDTH = 8;
 
 function formatLineNo(n: number | undefined, width: number): string {
   if (n === undefined) return ' '.repeat(width);
@@ -28,19 +32,19 @@ function renderLineContent(line: DisplayLine, theme: Theme, contentWidth: number
     case 'add':
       return (
         <Text bold backgroundColor={theme.addedBg} color={theme.addedFg}>
-          +{text}
+          {text}
         </Text>
       );
     case 'delete':
       return (
         <Text bold backgroundColor={theme.removedBg} color={theme.removedFg}>
-          -{text}
+          {text}
         </Text>
       );
     case 'expanded-context':
       return (
         <Text bold color={theme.expandedContextFg} dimColor>
-          {' '}{text}
+          {text}
         </Text>
       );
     case 'hunk-header':
@@ -51,8 +55,8 @@ function renderLineContent(line: DisplayLine, theme: Theme, contentWidth: number
       return <Text bold color={theme.dimFg}>{line.content}</Text>;
     default:
       return (
-        <Text bold color={theme.contextFg} dimColor={line.kind === 'context'}>
-          {' '}{text}
+        <Text bold color={theme.contextFg}>
+          {text}
         </Text>
       );
   }
@@ -70,8 +74,10 @@ export function DiffView({
   emptyMessage = 'Select a file to view its diff',
 }: Props) {
   const innerHeight = Math.max(1, height - 1);
-  const gutterWidth = 8;
-  const contentWidth = Math.max(10, width - gutterWidth - 4);
+  const contentWidth = Math.max(
+    10,
+    width - GUTTER_WIDTH - SCROLLBAR_WIDTH - 4,
+  );
   const visible = lines.slice(scrollOffset, scrollOffset + innerHeight);
 
   return (
@@ -87,25 +93,36 @@ export function DiffView({
           <Text bold color={theme.dimFg}>{emptyMessage}</Text>
         </Box>
       ) : (
-        visible.map((line, i) => {
-          const absoluteIndex = scrollOffset + i;
-          const atCursor = focused && absoluteIndex === cursorLine;
-          return (
-            <Box key={absoluteIndex} paddingX={1}>
-              <Text
-                bold
-                backgroundColor={atCursor ? theme.borderFg : undefined}
-                color={atCursor ? theme.selectedFg : undefined}
-              >
-                <Text bold color={theme.dimFg}>
-                  {formatLineNo(line.oldLineNo, 4)}
-                  {formatLineNo(line.newLineNo, 4)}{' '}
-                </Text>
-                {renderLineContent(line, theme, contentWidth)}
-              </Text>
-            </Box>
-          );
-        })
+        <Box flexDirection="row" height={innerHeight}>
+          <Box flexDirection="column" flexGrow={1}>
+            {visible.map((line, i) => {
+              const absoluteIndex = scrollOffset + i;
+              const atCursor = focused && absoluteIndex === cursorLine;
+              return (
+                <Box key={absoluteIndex} paddingX={1}>
+                  <Text
+                    bold
+                    backgroundColor={atCursor ? theme.borderFg : undefined}
+                    color={atCursor ? theme.selectedFg : undefined}
+                  >
+                    <Text bold color={theme.dimFg}>
+                      {formatLineNo(line.oldLineNo, 4)}
+                      {formatLineNo(line.newLineNo, 4)}{' '}
+                    </Text>
+                    {renderLineContent(line, theme, contentWidth)}
+                  </Text>
+                </Box>
+              );
+            })}
+          </Box>
+          <DiffScrollBar
+            lines={lines}
+            scrollOffset={scrollOffset}
+            viewportHeight={innerHeight}
+            height={innerHeight}
+            theme={theme}
+          />
+        </Box>
       )}
     </Box>
   );

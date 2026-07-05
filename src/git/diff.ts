@@ -326,4 +326,32 @@ export async function readLineRange(
   return lines.slice(startLine - 1, endLine);
 }
 
+export async function readFullFile(
+  repoRoot: string,
+  revision: FileRevision,
+): Promise<string[]> {
+  if (revision.ref === null) {
+    try {
+      const content = readFileSync(join(repoRoot, revision.path), 'utf8');
+      const lines = content.split('\n');
+      if (lines.at(-1) === '') lines.pop();
+      return lines;
+    } catch {
+      return [];
+    }
+  }
+
+  try {
+    const content = await gitOrThrow(
+      ['show', `${revision.ref}:${revision.path}`],
+      repoRoot,
+    );
+    const lines = content.split('\n');
+    if (lines.at(-1) === '') lines.pop();
+    return lines;
+  } catch {
+    return [];
+  }
+}
+
 export { CONTEXT_LINES };
