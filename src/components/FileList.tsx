@@ -70,7 +70,7 @@ export function FileList({
           const index = scrollOffset + i;
           const selected = index === selectedRowIndex;
           const indent = '  '.repeat(row.depth);
-          const prefix =
+          const treePrefix =
             row.node.kind === 'dir'
               ? row.isExpanded
                 ? '▾ '
@@ -78,12 +78,6 @@ export function FileList({
               : selected
                 ? '● '
                 : '  ';
-          const label =
-            row.node.kind === 'dir' ? `${row.node.name}/` : row.node.name;
-          const labelWidth = Math.max(
-            4,
-            width - indent.length - prefix.length - 6,
-          );
           const file = row.node.file;
           const highlighted =
             row.node.kind === 'dir'
@@ -91,6 +85,16 @@ export function FileList({
               : file
                 ? isEditedFile(file)
                 : false;
+          const statusPrefix =
+            row.node.kind === 'file'
+              ? highlighted && file
+                ? `${statusBadge(file.status)} `
+                : '  '
+              : '  ';
+          const label =
+            row.node.kind === 'dir' ? `${row.node.name}/` : row.node.name;
+          const gutterLen = indent.length + treePrefix.length + statusPrefix.length;
+          const labelWidth = Math.max(4, width - gutterLen - 6);
 
           return (
             <Box key={`${row.node.path}:${index}`} paddingX={1}>
@@ -107,36 +111,31 @@ export function FileList({
                 dimColor={!highlighted && !selected}
               >
                 {indent}
-                {prefix}
-                {row.node.kind === 'file' && file ? (
+                {treePrefix}
+                {row.node.kind === 'file' && highlighted && file ? (
                   <>
-                    {highlighted ? (
-                      <>
-                        <Text
-                          bold
-                          color={selected ? theme.selectedFg : theme.hunkHeaderFg}
-                        >
-                          {statusBadge(file.status)}
-                        </Text>{' '}
-                      </>
-                    ) : (
-                      '   '
-                    )}
-                    {truncateName(label, labelWidth)}
-                    {highlighted && (file.additions > 0 || file.deletions > 0) && (
-                      <Text bold color={theme.dimFg}>
-                        {' '}
-                        {file.additions > 0 && (
-                          <Text bold color="green">+{file.additions}</Text>
-                        )}
-                        {file.deletions > 0 && (
-                          <Text bold color="red">-{file.deletions}</Text>
-                        )}
-                      </Text>
-                    )}
+                    <Text
+                      bold
+                      color={selected ? theme.selectedFg : theme.hunkHeaderFg}
+                    >
+                      {statusBadge(file.status)}
+                    </Text>
+                    {' '}
                   </>
                 ) : (
-                  truncateName(label, labelWidth)
+                  statusPrefix
+                )}
+                {truncateName(label, labelWidth)}
+                {row.node.kind === 'file' && file && highlighted && (file.additions > 0 || file.deletions > 0) && (
+                  <Text bold color={theme.dimFg}>
+                    {' '}
+                    {file.additions > 0 && (
+                      <Text bold color="green">+{file.additions}</Text>
+                    )}
+                    {file.deletions > 0 && (
+                      <Text bold color="red">-{file.deletions}</Text>
+                    )}
+                  </Text>
                 )}
               </Text>
             </Box>
