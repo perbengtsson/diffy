@@ -67,20 +67,13 @@ export function DiffView({
   theme,
   filePath,
 }: Props) {
-  const innerHeight = Math.max(1, height - 2);
+  const innerHeight = Math.max(1, height - 1);
   const gutterWidth = 8;
   const contentWidth = Math.max(10, width - gutterWidth - 4);
   const visible = lines.slice(scrollOffset, scrollOffset + innerHeight);
 
   return (
-    <Box
-      flexDirection="column"
-      width={width}
-      height={height}
-      borderStyle="single"
-      borderColor={focused ? theme.selectedBg : theme.borderFg}
-      flexGrow={1}
-    >
+    <Box flexDirection="column" width={width} height={height} flexGrow={1}>
       <Box paddingX={1}>
         <Text bold color={focused ? theme.selectedBg : theme.defaultFg}>
           Diff

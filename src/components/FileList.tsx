@@ -42,7 +42,7 @@ export function FileList({
   focused,
   theme,
 }: Props) {
-  const innerHeight = Math.max(1, height - 2);
+  const innerHeight = Math.max(1, height - 1);
   const visible = files.slice(scrollOffset, scrollOffset + innerHeight);
   const pathWidth = Math.max(8, width - 10);
 
@@ -52,7 +52,11 @@ export function FileList({
       width={width}
       height={height}
       borderStyle="single"
-      borderColor={focused ? theme.selectedBg : theme.borderFg}
+      borderTop={false}
+      borderBottom={false}
+      borderLeft={false}
+      borderRight
+      borderColor={theme.borderFg}
     >
       <Box paddingX={1}>
         <Text bold color={focused ? theme.selectedBg : theme.defaultFg}>

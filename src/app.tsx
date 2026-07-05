@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, useApp, useInput, useStdout } from 'ink';
+import { Box, useApp, useInput } from 'ink';
 import { FileList } from './components/FileList.js';
 import { DiffView } from './components/DiffView.js';
 import { StatusBar } from './components/StatusBar.js';
@@ -15,6 +15,7 @@ import {
 } from './diff/expand.js';
 import type { DisplayLine, HunkExpansion } from './diff/types.js';
 import { watchRepo } from './watch/repoWatcher.js';
+import { useTerminalSize } from './hooks/useTerminalSize.js';
 
 type Focus = 'files' | 'diff';
 
@@ -26,7 +27,7 @@ type Props = {
 
 export function App({ initialSnapshot, cwd, watch }: Props) {
   const { exit } = useApp();
-  const { stdout } = useStdout();
+  const { columns, rows } = useTerminalSize();
   const theme = useMemo(() => getTheme(), []);
 
   const [snapshot, setSnapshot] = useState(initialSnapshot);
@@ -46,8 +47,6 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
   const modeRef = useRef(initialSnapshot.mode);
   modeRef.current = snapshot.mode;
 
-  const columns = stdout.columns ?? 80;
-  const rows = stdout.rows ?? 24;
   const filePaneWidth = Math.max(20, Math.min(32, Math.floor(columns * 0.28)));
   const diffPaneWidth = Math.max(30, columns - filePaneWidth - 1);
   const contentHeight = Math.max(5, rows - 2);
@@ -126,8 +125,13 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
     [selectedFile],
   );
 
-  const maxFileScroll = Math.max(0, snapshot.files.length - (contentHeight - 2));
-  const maxDiffScroll = Math.max(0, displayLines.length - (contentHeight - 2));
+  const maxFileScroll = Math.max(0, snapshot.files.length - (contentHeight - 1));
+  const maxDiffScroll = Math.max(0, displayLines.length - (contentHeight - 1));
+
+  useEffect(() => {
+    setFileScroll((s) => Math.min(s, maxFileScroll));
+    setDiffScroll((s) => Math.min(s, maxDiffScroll));
+  }, [maxFileScroll, maxDiffScroll]);
 
   useInput((input, key) => {
     if (input === 'q' || (key.ctrl && input === 'c')) {
@@ -149,7 +153,7 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
       if (input === 'j' || key.downArrow) {
         setSelectedIndex((i) => {
           const next = Math.min(snapshot.files.length - 1, i + 1);
-          if (next >= fileScroll + contentHeight - 2) {
+          if (next >= fileScroll + contentHeight - 1) {
             setFileScroll((s) => Math.min(maxFileScroll, s + 1));
           }
           return next;
@@ -172,7 +176,7 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
     if (input === 'j' || key.downArrow) {
       setCursorLine((c) => {
         const next = Math.min(displayLines.length - 1, c + 1);
-        if (next >= diffScroll + contentHeight - 2) {
+        if (next >= diffScroll + contentHeight - 1) {
           setDiffScroll((s) => Math.min(maxDiffScroll, s + 1));
         }
         return next;
@@ -191,7 +195,7 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
     } else if (input === 'G') {
       const last = Math.max(0, displayLines.length - 1);
       setCursorLine(last);
-      setDiffScroll(Math.max(0, displayLines.length - (contentHeight - 2)));
+      setDiffScroll(Math.max(0, displayLines.length - (contentHeight - 1)));
     } else if (input === 'h' || key.leftArrow) {
       setFocus('files');
     } else if (input === '{' || (key.ctrl && input === 'u')) {
