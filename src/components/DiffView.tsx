@@ -1,4 +1,8 @@
 import { Box, Text } from 'ink';
+import type { LineHighlightCache } from '../highlight/cache.js';
+import { tokensForLine } from '../highlight/cache.js';
+import type { HighlightToken } from '../highlight/tokens.js';
+import { truncateTokens } from '../highlight/tokens.js';
 import type { DisplayLine, DisplayLineKind } from '../diff/types.js';
 import type { Theme } from '../theme.js';
 import { DiffScrollBar } from './DiffScrollBar.js';
@@ -11,6 +15,7 @@ type Props = {
   width: number;
   focused: boolean;
   theme: Theme;
+  highlightCache?: LineHighlightCache;
   emptyMessage?: string;
 };
 
@@ -26,7 +31,95 @@ function isUneditedLine(kind: DisplayLineKind): boolean {
   return kind === 'context' || kind === 'expanded-context';
 }
 
-function renderLineContent(line: DisplayLine, theme: Theme, contentWidth: number) {
+function gutterColor(
+  line: DisplayLine,
+  side: 'old' | 'new',
+  theme: Theme,
+): string {
+  if (side === 'old' && line.kind === 'delete' && line.oldLineNo !== undefined) {
+    return theme.removedFg;
+  }
+  if (side === 'new' && line.kind === 'add' && line.newLineNo !== undefined) {
+    return theme.addedFg;
+  }
+  return theme.dimFg;
+}
+
+function renderGutter(line: DisplayLine, theme: Theme, bold: boolean) {
+  return (
+    <>
+      <Text bold={bold} color={gutterColor(line, 'old', theme)}>
+        {formatLineNo(line.oldLineNo, 4)}
+      </Text>
+      <Text bold={bold} color={gutterColor(line, 'new', theme)}>
+        {formatLineNo(line.newLineNo, 4)}
+      </Text>
+      {' '}
+    </>
+  );
+}
+
+function renderTokens(
+  tokens: HighlightToken[],
+  opts: {
+    bold?: boolean;
+    backgroundColor?: string;
+    defaultColor?: string;
+    dimColor?: boolean;
+    contentWidth: number;
+  },
+) {
+  const truncated = truncateTokens(tokens, opts.contentWidth);
+  return truncated.map((token, i) => (
+    <Text
+      key={i}
+      bold={opts.bold}
+      color={token.color ?? opts.defaultColor}
+      backgroundColor={opts.backgroundColor}
+      dimColor={opts.dimColor}
+    >
+      {token.text}
+    </Text>
+  ));
+}
+
+function renderLineContent(
+  line: DisplayLine,
+  theme: Theme,
+  contentWidth: number,
+  highlightCache: LineHighlightCache | undefined,
+) {
+  const tokens = tokensForLine(line, highlightCache);
+  const bold = !isUneditedLine(line.kind);
+
+  if (tokens) {
+    switch (line.kind) {
+      case 'add':
+        return renderTokens(tokens, {
+          bold,
+          backgroundColor: theme.addedBg,
+          contentWidth,
+        });
+      case 'delete':
+        return renderTokens(tokens, {
+          bold,
+          backgroundColor: theme.removedBg,
+          contentWidth,
+        });
+      case 'expanded-context':
+        return renderTokens(tokens, {
+          defaultColor: theme.expandedContextFg,
+          dimColor: true,
+          contentWidth,
+        });
+      case 'context':
+        return renderTokens(tokens, {
+          defaultColor: theme.contextFg,
+          contentWidth,
+        });
+    }
+  }
+
   const text = line.content.length > contentWidth
     ? line.content.slice(0, contentWidth - 1) + '…'
     : line.content;
@@ -34,13 +127,13 @@ function renderLineContent(line: DisplayLine, theme: Theme, contentWidth: number
   switch (line.kind) {
     case 'add':
       return (
-        <Text bold backgroundColor={theme.addedBg} color={theme.addedFg}>
+        <Text bold backgroundColor={theme.addedBg}>
           {text}
         </Text>
       );
     case 'delete':
       return (
-        <Text bold backgroundColor={theme.removedBg} color={theme.removedFg}>
+        <Text bold backgroundColor={theme.removedBg}>
           {text}
         </Text>
       );
@@ -73,6 +166,7 @@ export function DiffView({
   width,
   focused,
   theme,
+  highlightCache,
   emptyMessage = 'Select a file to view its diff',
 }: Props) {
   const innerHeight = Math.max(1, height);
@@ -102,11 +196,8 @@ export function DiffView({
                     backgroundColor={atCursor ? theme.borderFg : undefined}
                     color={atCursor ? theme.selectedFg : undefined}
                   >
-                    <Text bold={bold} color={theme.dimFg}>
-                      {formatLineNo(line.oldLineNo, 4)}
-                      {formatLineNo(line.newLineNo, 4)}{' '}
-                    </Text>
-                    {renderLineContent(line, theme, contentWidth)}
+                    {renderGutter(line, theme, bold)}
+                    {renderLineContent(line, theme, contentWidth, highlightCache)}
                   </Text>
                 </Box>
               );

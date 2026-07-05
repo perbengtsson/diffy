@@ -14,6 +14,10 @@ import {
   findHunkAtLine,
 } from './diff/expand.js';
 import type { DisplayLine, HunkExpansion } from './diff/types.js';
+import {
+  buildLineHighlightCache,
+  type LineHighlightCache,
+} from './highlight/cache.js';
 import { watchRepo } from './watch/repoWatcher.js';
 import { useTerminalSize } from './hooks/useTerminalSize.js';
 import { useMouse } from './hooks/useMouse.js';
@@ -58,6 +62,7 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
   const [focus, setFocus] = useState<Focus>('files');
   const [expansions, setExpansions] = useState<Map<string, HunkExpansion>>(new Map());
   const [displayLines, setDisplayLines] = useState<DisplayLine[]>([]);
+  const [highlightCache, setHighlightCache] = useState<LineHighlightCache | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loadingDiff, setLoadingDiff] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -168,6 +173,26 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
       cancelled = true;
     };
   }, [selectedFile, snapshot.mode, snapshot.repoRoot, expansions]);
+
+  useEffect(() => {
+    if (!selectedFile || selectedFile.isBinary) {
+      setHighlightCache(null);
+      return;
+    }
+
+    let cancelled = false;
+    buildLineHighlightCache(selectedFile, snapshot.mode, snapshot.repoRoot)
+      .then((cache) => {
+        if (!cancelled) setHighlightCache(cache);
+      })
+      .catch(() => {
+        if (!cancelled) setHighlightCache(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedFile, snapshot.mode, snapshot.repoRoot]);
 
   const hunks = useMemo(
     () => (selectedFile ? extractHunks(selectedFile.rawDiff, selectedFile.path) : []),
@@ -359,6 +384,7 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
           width={diffPaneWidth}
           focused={focus === 'diff'}
           theme={theme}
+          highlightCache={highlightCache ?? undefined}
           emptyMessage={
             selectedFile && !isEditedFile(selectedFile)
               ? 'No changes'
