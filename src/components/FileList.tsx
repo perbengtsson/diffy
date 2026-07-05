@@ -1,15 +1,17 @@
 import { Box, Text } from 'ink';
+import type { FileTreeRow } from '../files/tree.js';
 import type { DiffFile } from '../git/types.js';
 import type { Theme } from '../theme.js';
 
 type Props = {
-  files: DiffFile[];
-  selectedIndex: number;
+  rows: FileTreeRow[];
+  selectedRowIndex: number;
   scrollOffset: number;
   height: number;
   width: number;
   focused: boolean;
   theme: Theme;
+  fileCount: number;
 };
 
 function statusBadge(status: DiffFile['status']): string {
@@ -27,24 +29,24 @@ function statusBadge(status: DiffFile['status']): string {
   }
 }
 
-function truncatePath(path: string, maxLen: number): string {
-  if (path.length <= maxLen) return path;
-  if (maxLen <= 3) return path.slice(0, maxLen);
-  return '…' + path.slice(path.length - (maxLen - 1));
+function truncateName(name: string, maxLen: number): string {
+  if (name.length <= maxLen) return name;
+  if (maxLen <= 3) return name.slice(0, maxLen);
+  return '…' + name.slice(name.length - (maxLen - 1));
 }
 
 export function FileList({
-  files,
-  selectedIndex,
+  rows,
+  selectedRowIndex,
   scrollOffset,
   height,
   width,
   focused,
   theme,
+  fileCount,
 }: Props) {
   const innerHeight = Math.max(1, height - 1);
-  const visible = files.slice(scrollOffset, scrollOffset + innerHeight);
-  const pathWidth = Math.max(8, width - 10);
+  const visible = rows.slice(scrollOffset, scrollOffset + innerHeight);
 
   return (
     <Box
@@ -60,39 +62,62 @@ export function FileList({
     >
       <Box paddingX={1}>
         <Text bold color={focused ? theme.selectedBg : theme.defaultFg}>
-          Files ({files.length})
+          Files ({fileCount})
         </Text>
       </Box>
-      {files.length === 0 ? (
+      {rows.length === 0 ? (
         <Box paddingX={1}>
           <Text bold color={theme.dimFg}>No changes</Text>
         </Box>
       ) : (
-        visible.map((file, i) => {
+        visible.map((row, i) => {
           const index = scrollOffset + i;
-          const selected = index === selectedIndex;
+          const selected = index === selectedRowIndex;
+          const indent = '  '.repeat(row.depth);
+          const prefix =
+            row.node.kind === 'dir'
+              ? row.isExpanded
+                ? '▾ '
+                : '▸ '
+              : selected
+                ? '● '
+                : '  ';
+          const label =
+            row.node.kind === 'dir' ? `${row.node.name}/` : row.node.name;
+          const labelWidth = Math.max(
+            4,
+            width - indent.length - prefix.length - 6,
+          );
+
           return (
-            <Box key={file.path} paddingX={1}>
+            <Box key={`${row.node.path}:${index}`} paddingX={1}>
               <Text
                 bold
                 backgroundColor={selected ? theme.selectedBg : undefined}
                 color={selected ? theme.selectedFg : theme.defaultFg}
               >
-                {selected ? '● ' : '  '}
-                <Text bold color={selected ? theme.selectedFg : theme.hunkHeaderFg}>
-                  {statusBadge(file.status)}
-                </Text>{' '}
-                {truncatePath(file.path, pathWidth)}
-                {(file.additions > 0 || file.deletions > 0) && (
-                  <Text bold color={theme.dimFg}>
-                    {' '}
-                    {file.additions > 0 && (
-                      <Text bold color="green">+{file.additions}</Text>
+                {indent}
+                {prefix}
+                {row.node.kind === 'file' && row.node.file ? (
+                  <>
+                    <Text bold color={selected ? theme.selectedFg : theme.hunkHeaderFg}>
+                      {statusBadge(row.node.file.status)}
+                    </Text>{' '}
+                    {truncateName(label, labelWidth)}
+                    {(row.node.file.additions > 0 || row.node.file.deletions > 0) && (
+                      <Text bold color={theme.dimFg}>
+                        {' '}
+                        {row.node.file.additions > 0 && (
+                          <Text bold color="green">+{row.node.file.additions}</Text>
+                        )}
+                        {row.node.file.deletions > 0 && (
+                          <Text bold color="red">-{row.node.file.deletions}</Text>
+                        )}
+                      </Text>
                     )}
-                    {file.deletions > 0 && (
-                      <Text bold color="red">-{file.deletions}</Text>
-                    )}
-                  </Text>
+                  </>
+                ) : (
+                  truncateName(label, labelWidth)
                 )}
               </Text>
             </Box>
