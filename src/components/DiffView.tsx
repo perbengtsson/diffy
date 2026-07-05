@@ -26,31 +26,31 @@ function renderLineContent(line: DisplayLine, theme: Theme, contentWidth: number
   switch (line.kind) {
     case 'add':
       return (
-        <Text backgroundColor={theme.addedBg} color={theme.addedFg}>
+        <Text bold backgroundColor={theme.addedBg} color={theme.addedFg}>
           +{text}
         </Text>
       );
     case 'delete':
       return (
-        <Text backgroundColor={theme.removedBg} color={theme.removedFg}>
+        <Text bold backgroundColor={theme.removedBg} color={theme.removedFg}>
           -{text}
         </Text>
       );
     case 'expanded-context':
       return (
-        <Text color={theme.expandedContextFg} dimColor>
+        <Text bold color={theme.expandedContextFg} dimColor>
           {' '}{text}
         </Text>
       );
     case 'hunk-header':
-      return <Text color={theme.hunkHeaderFg}>{line.content}</Text>;
+      return <Text bold color={theme.hunkHeaderFg}>{line.content}</Text>;
     case 'file-header':
-      return <Text color={theme.dimFg}>{line.content}</Text>;
+      return <Text bold color={theme.dimFg}>{line.content}</Text>;
     case 'binary':
-      return <Text color={theme.dimFg}>{line.content}</Text>;
+      return <Text bold color={theme.dimFg}>{line.content}</Text>;
     default:
       return (
-        <Text color={theme.contextFg} dimColor={line.kind === 'context'}>
+        <Text bold color={theme.contextFg} dimColor={line.kind === 'context'}>
           {' '}{text}
         </Text>
       );
@@ -78,11 +78,11 @@ export function DiffView({
         <Text bold color={focused ? theme.selectedBg : theme.defaultFg}>
           Diff
         </Text>
-        <Text color={theme.dimFg}> — {filePath || '(none)'}</Text>
+        <Text bold color={theme.dimFg}> — {filePath || '(none)'}</Text>
       </Box>
       {lines.length === 0 ? (
         <Box paddingX={1}>
-          <Text color={theme.dimFg}>Select a file to view its diff</Text>
+          <Text bold color={theme.dimFg}>Select a file to view its diff</Text>
         </Box>
       ) : (
         visible.map((line, i) => {
@@ -91,10 +91,11 @@ export function DiffView({
           return (
             <Box key={absoluteIndex} paddingX={1}>
               <Text
+                bold
                 backgroundColor={atCursor ? theme.borderFg : undefined}
                 color={atCursor ? theme.selectedFg : undefined}
               >
-                <Text color={theme.dimFg}>
+                <Text bold color={theme.dimFg}>
                   {formatLineNo(line.oldLineNo, 4)}
                   {formatLineNo(line.newLineNo, 4)}{' '}
                 </Text>

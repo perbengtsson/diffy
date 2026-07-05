@@ -35,7 +35,7 @@ export function StatusBar({
 
   return (
     <Box width={width}>
-      <Text color={theme.statusFg} dimColor>
+      <Text bold color={theme.statusFg} dimColor>
         [{modeLabel}] focus:{focusLabel}
         {watching ? (refreshing ? ' ⟳' : ' ●') : ''}
         {filePath ? ` ${truncatedPath}` : ''} | {keys}

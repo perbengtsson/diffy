@@ -65,7 +65,7 @@ export function FileList({
       </Box>
       {files.length === 0 ? (
         <Box paddingX={1}>
-          <Text color={theme.dimFg}>No changes</Text>
+          <Text bold color={theme.dimFg}>No changes</Text>
         </Box>
       ) : (
         visible.map((file, i) => {
@@ -74,22 +74,23 @@ export function FileList({
           return (
             <Box key={file.path} paddingX={1}>
               <Text
+                bold
                 backgroundColor={selected ? theme.selectedBg : undefined}
                 color={selected ? theme.selectedFg : theme.defaultFg}
               >
                 {selected ? '● ' : '  '}
-                <Text color={selected ? theme.selectedFg : theme.hunkHeaderFg}>
+                <Text bold color={selected ? theme.selectedFg : theme.hunkHeaderFg}>
                   {statusBadge(file.status)}
                 </Text>{' '}
                 {truncatePath(file.path, pathWidth)}
                 {(file.additions > 0 || file.deletions > 0) && (
-                  <Text color={theme.dimFg}>
+                  <Text bold color={theme.dimFg}>
                     {' '}
                     {file.additions > 0 && (
-                      <Text color="green">+{file.additions}</Text>
+                      <Text bold color="green">+{file.additions}</Text>
                     )}
                     {file.deletions > 0 && (
-                      <Text color="red">-{file.deletions}</Text>
+                      <Text bold color="red">-{file.deletions}</Text>
                     )}
                   </Text>
                 )}
