@@ -1,5 +1,6 @@
 import { Box, Text } from 'ink';
 import type { FileTreeRow } from '../files/tree.js';
+import { isEditedFile } from '../files/tree.js';
 import type { DiffFile } from '../git/types.js';
 import type { Theme } from '../theme.js';
 
@@ -11,7 +12,9 @@ type Props = {
   width: number;
   focused: boolean;
   theme: Theme;
-  fileCount: number;
+  changedCount: number;
+  totalCount: number;
+  showUnedited: boolean;
 };
 
 function statusBadge(status: DiffFile['status']): string {
@@ -24,6 +27,8 @@ function statusBadge(status: DiffFile['status']): string {
       return 'R';
     case 'untracked':
       return '?';
+    case 'unchanged':
+      return ' ';
     default:
       return 'M';
   }
@@ -43,7 +48,9 @@ export function FileList({
   width,
   focused,
   theme,
-  fileCount,
+  changedCount,
+  totalCount,
+  showUnedited,
 }: Props) {
   const innerHeight = Math.max(1, height - 1);
   const visible = rows.slice(scrollOffset, scrollOffset + innerHeight);
@@ -60,9 +67,19 @@ export function FileList({
       borderRight
       borderColor={theme.borderFg}
     >
-      <Box paddingX={1}>
-        <Text bold color={focused ? theme.selectedBg : theme.defaultFg}>
-          Files ({fileCount})
+      <Box paddingX={1} width={width - 2} flexDirection="row">
+        <Box flexGrow={1}>
+          <Text bold color={focused ? theme.selectedBg : theme.defaultFg}>
+            Files ({changedCount}
+            {showUnedited ? `/${totalCount}` : ''})
+          </Text>
+        </Box>
+        <Text
+          bold={showUnedited}
+          color={showUnedited ? theme.defaultFg : theme.dimFg}
+          dimColor={!showUnedited}
+        >
+          {showUnedited ? '▾' : '▸'}
         </Text>
       </Box>
       {rows.length === 0 ? (
@@ -88,30 +105,48 @@ export function FileList({
             4,
             width - indent.length - prefix.length - 6,
           );
+          const file = row.node.file;
+          const edited = file ? isEditedFile(file) : true;
 
           return (
             <Box key={`${row.node.path}:${index}`} paddingX={1}>
               <Text
-                bold
+                bold={edited || row.node.kind === 'dir'}
                 backgroundColor={selected ? theme.selectedBg : undefined}
-                color={selected ? theme.selectedFg : theme.defaultFg}
+                color={
+                  selected
+                    ? theme.selectedFg
+                    : edited
+                      ? theme.defaultFg
+                      : theme.dimFg
+                }
+                dimColor={!edited && row.node.kind === 'file' && !selected}
               >
                 {indent}
                 {prefix}
-                {row.node.kind === 'file' && row.node.file ? (
+                {row.node.kind === 'file' && file ? (
                   <>
-                    <Text bold color={selected ? theme.selectedFg : theme.hunkHeaderFg}>
-                      {statusBadge(row.node.file.status)}
-                    </Text>{' '}
+                    {edited ? (
+                      <>
+                        <Text
+                          bold
+                          color={selected ? theme.selectedFg : theme.hunkHeaderFg}
+                        >
+                          {statusBadge(file.status)}
+                        </Text>{' '}
+                      </>
+                    ) : (
+                      '   '
+                    )}
                     {truncateName(label, labelWidth)}
-                    {(row.node.file.additions > 0 || row.node.file.deletions > 0) && (
+                    {edited && (file.additions > 0 || file.deletions > 0) && (
                       <Text bold color={theme.dimFg}>
                         {' '}
-                        {row.node.file.additions > 0 && (
-                          <Text bold color="green">+{row.node.file.additions}</Text>
+                        {file.additions > 0 && (
+                          <Text bold color="green">+{file.additions}</Text>
                         )}
-                        {row.node.file.deletions > 0 && (
-                          <Text bold color="red">-{row.node.file.deletions}</Text>
+                        {file.deletions > 0 && (
+                          <Text bold color="red">-{file.deletions}</Text>
                         )}
                       </Text>
                     )}

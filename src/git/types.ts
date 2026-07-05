@@ -3,7 +3,8 @@ export type FileStatus =
   | 'added'
   | 'deleted'
   | 'renamed'
-  | 'untracked';
+  | 'untracked'
+  | 'unchanged';
 
 export type DiffMode =
   | { kind: 'uncommitted'; stagedOnly: boolean }

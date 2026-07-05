@@ -18,8 +18,11 @@ import { watchRepo } from './watch/repoWatcher.js';
 import { useTerminalSize } from './hooks/useTerminalSize.js';
 import {
   buildFileTree,
+  countEditedFiles,
+  findFirstEditedIndex,
   findRowIndexForPath,
   flattenFileTree,
+  isEditedFile,
   pruneCollapsedDirs,
   toggleDirCollapsed,
 } from './files/tree.js';
@@ -38,9 +41,12 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
   const theme = useMemo(() => getTheme(), []);
 
   const [snapshot, setSnapshot] = useState(initialSnapshot);
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState(() =>
+    findFirstEditedIndex(initialSnapshot.files),
+  );
   const [fileRowIndex, setFileRowIndex] = useState(0);
   const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(() => new Set());
+  const [showUnedited, setShowUnedited] = useState(true);
   const [fileScroll, setFileScroll] = useState(0);
   const [diffScroll, setDiffScroll] = useState(0);
   const [cursorLine, setCursorLine] = useState(0);
@@ -51,7 +57,9 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
   const [loadingDiff, setLoadingDiff] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const selectedPathRef = useRef<string | undefined>(initialSnapshot.files[0]?.path);
+  const selectedPathRef = useRef<string | undefined>(
+    initialSnapshot.files[findFirstEditedIndex(initialSnapshot.files)]?.path,
+  );
   const refreshingRef = useRef(false);
   const modeRef = useRef(initialSnapshot.mode);
   modeRef.current = snapshot.mode;
@@ -60,10 +68,14 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
   const diffPaneWidth = Math.max(30, columns - filePaneWidth - 1);
   const contentHeight = Math.max(5, rows - 2);
 
-  const fileTree = useMemo(
-    () => buildFileTree(snapshot.files),
-    [snapshot.files],
+  const treeFiles = useMemo(
+    () =>
+      showUnedited
+        ? snapshot.files
+        : snapshot.files.filter(isEditedFile),
+    [snapshot.files, showUnedited],
   );
+  const fileTree = useMemo(() => buildFileTree(treeFiles), [treeFiles]);
   const visibleFileRows = useMemo(
     () => flattenFileTree(fileTree, collapsedDirs),
     [fileTree, collapsedDirs],
@@ -87,9 +99,9 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
       setCollapsedDirs((prev) => pruneCollapsedDirs(prev, next.files));
       if (prevPath) {
         const idx = next.files.findIndex((f) => f.path === prevPath);
-        setSelectedIndex((i) => (idx >= 0 ? idx : Math.min(i, Math.max(0, next.files.length - 1))));
+        setSelectedIndex(idx >= 0 ? idx : findFirstEditedIndex(next.files));
       } else {
-        setSelectedIndex((i) => Math.min(i, Math.max(0, next.files.length - 1)));
+        setSelectedIndex(findFirstEditedIndex(next.files));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -179,6 +191,11 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
 
     if (focus === 'files') {
       const currentRow = visibleFileRows[fileRowIndex];
+
+      if (input === 'u') {
+        setShowUnedited((show) => !show);
+        return;
+      }
 
       const selectFileRow = (nextRow: number) => {
         setFileRowIndex(nextRow);
@@ -287,7 +304,9 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
           width={filePaneWidth}
           focused={focus === 'files'}
           theme={theme}
-          fileCount={snapshot.files.length}
+          changedCount={countEditedFiles(snapshot.files)}
+          totalCount={snapshot.files.length}
+          showUnedited={showUnedited}
         />
         <DiffView
           lines={loadingDiff ? [{ kind: 'binary', content: 'Loading…' }] : displayLines}
@@ -298,6 +317,11 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
           focused={focus === 'diff'}
           theme={theme}
           filePath={selectedFile?.path ?? ''}
+          emptyMessage={
+            selectedFile && !isEditedFile(selectedFile)
+              ? 'No changes'
+              : 'Select a file to view its diff'
+          }
         />
       </Box>
       <StatusBar

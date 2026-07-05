@@ -56,6 +56,38 @@ async function diffUntrackedFile(
   );
 }
 
+async function listTrackedFiles(repoRoot: string): Promise<string[]> {
+  const out = await gitOrThrow(['ls-files'], repoRoot);
+  return out.split('\n').filter(Boolean);
+}
+
+function mergeWithTrackedFiles(
+  changedFiles: DiffFile[],
+  trackedPaths: string[],
+): DiffFile[] {
+  const changedMap = new Map(changedFiles.map((file) => [file.path, file]));
+  const paths = new Set(trackedPaths);
+  for (const file of changedFiles) paths.add(file.path);
+
+  const files: DiffFile[] = [];
+  for (const path of [...paths].sort()) {
+    const changed = changedMap.get(path);
+    if (changed) {
+      files.push(changed);
+    } else {
+      files.push({
+        path,
+        status: 'unchanged',
+        additions: 0,
+        deletions: 0,
+        rawDiff: '',
+        isBinary: false,
+      });
+    }
+  }
+  return files;
+}
+
 async function getUncommittedFiles(
   repoRoot: string,
   stagedOnly: boolean,
@@ -199,10 +231,12 @@ export async function loadDiffSnapshot(
   mode: DiffMode,
 ): Promise<DiffSnapshot> {
   const repoRoot = await findRepoRoot(cwd);
-  const files =
+  const changedFiles =
     mode.kind === 'uncommitted'
       ? await getUncommittedFiles(repoRoot, mode.stagedOnly)
       : await getBaseDiffFiles(repoRoot, mode.base, mode.includeUncommitted);
+  const trackedPaths = await listTrackedFiles(repoRoot);
+  const files = mergeWithTrackedFiles(changedFiles, trackedPaths);
 
   return {
     repoRoot,

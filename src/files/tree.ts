@@ -14,6 +14,19 @@ export type FileTreeRow = {
   isExpanded: boolean;
 };
 
+export function isEditedFile(file: DiffFile): boolean {
+  return file.status !== 'unchanged';
+}
+
+export function countEditedFiles(files: DiffFile[]): number {
+  return files.filter(isEditedFile).length;
+}
+
+export function findFirstEditedIndex(files: DiffFile[]): number {
+  const idx = files.findIndex(isEditedFile);
+  return idx >= 0 ? idx : 0;
+}
+
 export function buildFileTree(files: DiffFile[]): FileTreeNode[] {
   const root: FileTreeNode[] = [];
 

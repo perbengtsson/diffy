@@ -11,6 +11,7 @@ type Props = {
   focused: boolean;
   theme: Theme;
   filePath: string;
+  emptyMessage?: string;
 };
 
 function formatLineNo(n: number | undefined, width: number): string {
@@ -66,6 +67,7 @@ export function DiffView({
   focused,
   theme,
   filePath,
+  emptyMessage = 'Select a file to view its diff',
 }: Props) {
   const innerHeight = Math.max(1, height - 1);
   const gutterWidth = 8;
@@ -82,7 +84,7 @@ export function DiffView({
       </Box>
       {lines.length === 0 ? (
         <Box paddingX={1}>
-          <Text bold color={theme.dimFg}>Select a file to view its diff</Text>
+          <Text bold color={theme.dimFg}>{emptyMessage}</Text>
         </Box>
       ) : (
         visible.map((line, i) => {
