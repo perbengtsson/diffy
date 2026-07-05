@@ -1,5 +1,5 @@
 import { Box, Text } from 'ink';
-import type { DisplayLine } from '../diff/types.js';
+import type { DisplayLine, DisplayLineKind } from '../diff/types.js';
 import type { Theme } from '../theme.js';
 import { DiffScrollBar } from './DiffScrollBar.js';
 
@@ -22,6 +22,10 @@ function formatLineNo(n: number | undefined, width: number): string {
   return String(n).padStart(width);
 }
 
+function isUneditedLine(kind: DisplayLineKind): boolean {
+  return kind === 'context' || kind === 'expanded-context';
+}
+
 function renderLineContent(line: DisplayLine, theme: Theme, contentWidth: number) {
   const text = line.content.length > contentWidth
     ? line.content.slice(0, contentWidth - 1) + '…'
@@ -42,7 +46,7 @@ function renderLineContent(line: DisplayLine, theme: Theme, contentWidth: number
       );
     case 'expanded-context':
       return (
-        <Text bold color={theme.expandedContextFg} dimColor>
+        <Text color={theme.expandedContextFg} dimColor>
           {text}
         </Text>
       );
@@ -54,7 +58,7 @@ function renderLineContent(line: DisplayLine, theme: Theme, contentWidth: number
       return <Text bold color={theme.dimFg}>{line.content}</Text>;
     default:
       return (
-        <Text bold color={theme.contextFg}>
+        <Text color={theme.contextFg}>
           {text}
         </Text>
       );
@@ -90,14 +94,15 @@ export function DiffView({
             {visible.map((line, i) => {
               const absoluteIndex = scrollOffset + i;
               const atCursor = focused && absoluteIndex === cursorLine;
+              const bold = !isUneditedLine(line.kind);
               return (
                 <Box key={absoluteIndex} paddingX={1}>
                   <Text
-                    bold
+                    bold={bold}
                     backgroundColor={atCursor ? theme.borderFg : undefined}
                     color={atCursor ? theme.selectedFg : undefined}
                   >
-                    <Text bold color={theme.dimFg}>
+                    <Text bold={bold} color={theme.dimFg}>
                       {formatLineNo(line.oldLineNo, 4)}
                       {formatLineNo(line.newLineNo, 4)}{' '}
                     </Text>
