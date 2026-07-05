@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Box, useApp, useInput } from 'ink';
 import { FileList } from './components/FileList.js';
+import { FileSummary, fileSummaryHeight } from './components/FileSummary.js';
 import { DiffView } from './components/DiffView.js';
 import { StatusBar } from './components/StatusBar.js';
 import { getTheme } from './theme.js';
@@ -33,6 +34,7 @@ import {
   pruneCollapsedDirs,
   toggleDirCollapsed,
 } from './files/tree.js';
+import { buildChangeSummary } from './files/summary.js';
 
 type Focus = 'files' | 'diff';
 
@@ -94,6 +96,13 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
     () => flattenFileTree(fileTree, collapsedDirs),
     [fileTree, collapsedDirs],
   );
+  const changeSummary = useMemo(
+    () => buildChangeSummary(snapshot.files),
+    [snapshot.files],
+  );
+  const summaryTypeRows = 5;
+  const summaryHeight = fileSummaryHeight(changeSummary, summaryTypeRows);
+  const fileListHeight = Math.max(1, contentHeight - summaryHeight);
 
   const selectedFile = snapshot.files[selectedIndex];
 
@@ -199,7 +208,7 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
     [selectedFile],
   );
 
-  const maxFileScroll = Math.max(0, visibleFileRows.length - contentHeight);
+  const maxFileScroll = Math.max(0, visibleFileRows.length - fileListHeight);
   const maxDiffScroll = Math.max(0, displayLines.length - contentHeight);
 
   useEffect(() => {
@@ -281,7 +290,7 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
         if (visibleFileRows.length === 0) return;
         const next = Math.min(visibleFileRows.length - 1, fileRowIndex + 1);
         selectRow(next);
-        if (next >= fileScroll + contentHeight) {
+        if (next >= fileScroll + fileListHeight) {
           setFileScroll((s) => Math.min(maxFileScroll, s + 1));
         }
       } else if (input === 'k' || key.upArrow) {
@@ -367,15 +376,23 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
   return (
     <Box flexDirection="column" width={columns} height={rows}>
       <Box flexDirection="row" height={contentHeight}>
-        <FileList
-          rows={visibleFileRows}
-          selectedRowIndex={fileRowIndex}
-          scrollOffset={fileScroll}
-          height={contentHeight}
-          width={filePaneWidth}
-          theme={theme}
-          dirsWithChanges={dirsWithChanges}
-        />
+        <Box flexDirection="column" width={filePaneWidth} height={contentHeight}>
+          <FileList
+            rows={visibleFileRows}
+            selectedRowIndex={fileRowIndex}
+            scrollOffset={fileScroll}
+            height={fileListHeight}
+            width={filePaneWidth}
+            theme={theme}
+            dirsWithChanges={dirsWithChanges}
+          />
+          <FileSummary
+            summary={changeSummary}
+            width={filePaneWidth}
+            theme={theme}
+            maxTypeRows={summaryTypeRows}
+          />
+        </Box>
         <DiffView
           lines={loadingDiff ? [{ kind: 'binary', content: 'Loading…' }] : displayLines}
           scrollOffset={diffScroll}
