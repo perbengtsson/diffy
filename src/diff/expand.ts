@@ -1,5 +1,6 @@
 import gitDiffParser from 'gitdiff-parser';
 import type { File } from 'gitdiff-parser';
+import { expandTabs } from '../display/text.js';
 import type { DiffFile, DiffMode } from '../git/types.js';
 import { getFileRevision, readFullFile } from '../git/diff.js';
 import type {
@@ -59,7 +60,7 @@ async function buildPlainFileLines(
   const fileLines = await readFullFile(repoRoot, revision);
   return fileLines.map((content, index) => ({
     kind: 'context' as const,
-    content,
+    content: expandTabs(content),
     oldLineNo: index + 1,
     newLineNo: index + 1,
   }));
@@ -99,7 +100,7 @@ async function buildFullUnifiedLines(
     );
     return source.map((content, index) => ({
       kind: 'add' as const,
-      content,
+      content: expandTabs(content),
       newLineNo: index + 1,
     }));
   }
@@ -112,7 +113,7 @@ async function buildFullUnifiedLines(
     );
     return source.map((content, index) => ({
       kind: 'delete' as const,
-      content,
+      content: expandTabs(content),
       oldLineNo: index + 1,
     }));
   }
@@ -125,7 +126,7 @@ async function buildFullUnifiedLines(
     while (nextNewLine < hunk.newStart) {
       result.push({
         kind: 'context',
-        content: newFileLines[nextNewLine - 1] ?? '',
+        content: expandTabs(newFileLines[nextNewLine - 1] ?? ''),
         oldLineNo: nextOldLine,
         newLineNo: nextNewLine,
       });
@@ -139,7 +140,7 @@ async function buildFullUnifiedLines(
         const newLineNo = change.newLineNumber;
         result.push({
           kind: 'context',
-          content: change.content,
+          content: expandTabs(change.content),
           oldLineNo,
           newLineNo,
         });
@@ -149,7 +150,7 @@ async function buildFullUnifiedLines(
         const oldLineNo = change.lineNumber ?? nextOldLine;
         result.push({
           kind: 'delete',
-          content: change.content,
+          content: expandTabs(change.content),
           oldLineNo,
         });
         nextOldLine = oldLineNo + 1;
@@ -157,7 +158,7 @@ async function buildFullUnifiedLines(
         const newLineNo = change.lineNumber ?? nextNewLine;
         result.push({
           kind: 'add',
-          content: change.content,
+          content: expandTabs(change.content),
           newLineNo,
         });
         nextNewLine = newLineNo + 1;
@@ -168,7 +169,7 @@ async function buildFullUnifiedLines(
   while (nextNewLine <= newFileLines.length) {
     result.push({
       kind: 'context',
-      content: newFileLines[nextNewLine - 1] ?? '',
+      content: expandTabs(newFileLines[nextNewLine - 1] ?? ''),
       oldLineNo: nextOldLine,
       newLineNo: nextNewLine,
     });

@@ -1,3 +1,4 @@
+import { expandTabs } from '../display/text.js';
 import type { DiffFile, DiffMode } from '../git/types.js';
 import { getFileRevision, readFullFile } from '../git/diff.js';
 import { languageFromPath } from './language.js';
@@ -20,8 +21,8 @@ export async function buildLineHighlightCache(
   ]);
 
   return {
-    new: highlightFileLines(newLines, language),
-    old: highlightFileLines(oldLines, language),
+    new: highlightFileLines(newLines.map(expandTabs), language),
+    old: highlightFileLines(oldLines.map(expandTabs), language),
   };
 }
 
