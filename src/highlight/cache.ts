@@ -21,8 +21,8 @@ export async function buildLineHighlightCache(
   ]);
 
   return {
-    new: highlightFileLines(newLines.map(expandTabs), language),
-    old: highlightFileLines(oldLines.map(expandTabs), language),
+    new: highlightFileLines(newLines.map((line) => expandTabs(line)), language),
+    old: highlightFileLines(oldLines.map((line) => expandTabs(line)), language),
   };
 }
 
