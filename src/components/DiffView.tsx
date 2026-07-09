@@ -47,6 +47,50 @@ function isUneditedLine(kind: DisplayLineKind): boolean {
   return kind === 'context' || kind === 'expanded-context';
 }
 
+function diffBackground(line: DisplayLine, theme: Theme): string | undefined {
+  if (line.kind === 'add') return theme.addedBg;
+  if (line.kind === 'delete') return theme.removedBg;
+  return undefined;
+}
+
+function usedContentWidth(
+  line: DisplayLine,
+  highlightCache: LineHighlightCache | undefined,
+  contentWidth: number,
+): number {
+  const tokens = tokensForLine(line, highlightCache);
+  if (tokens) {
+    let remaining = contentWidth;
+    let used = 0;
+    for (const token of tokens) {
+      if (remaining <= 0) break;
+      if (token.text.length <= remaining) {
+        used += token.text.length;
+        remaining -= token.text.length;
+        continue;
+      }
+      return remaining === 1 ? used + 1 : used + remaining;
+    }
+    return used;
+  }
+
+  const text = line.content;
+  return text.length > contentWidth ? contentWidth : text.length;
+}
+
+function renderLinePadding(
+  usedWidth: number,
+  contentWidth: number,
+  backgroundColor?: string,
+) {
+  if (!backgroundColor || usedWidth >= contentWidth) return null;
+  return (
+    <Text backgroundColor={backgroundColor}>
+      {' '.repeat(contentWidth - usedWidth)}
+    </Text>
+  );
+}
+
 function gutterColor(
   line: DisplayLine,
   side: 'old' | 'new',
@@ -128,24 +172,26 @@ function renderGutter(
   theme: Theme,
   bold: boolean,
   highlight?: SearchHighlightStyle,
+  diffBg?: string,
 ) {
+  const backgroundColor = highlight?.bg ?? diffBg;
   return (
     <>
       <Text
         bold={bold}
         color={highlight ? highlight.fg : gutterColor(line, 'old', theme)}
-        backgroundColor={highlight?.bg}
+        backgroundColor={backgroundColor}
       >
         {formatLineNo(line.oldLineNo, 4)}
       </Text>
       <Text
         bold={bold}
         color={highlight ? highlight.fg : gutterColor(line, 'new', theme)}
-        backgroundColor={highlight?.bg}
+        backgroundColor={backgroundColor}
       >
         {formatLineNo(line.newLineNo, 4)}
       </Text>
-      <Text backgroundColor={highlight?.bg}> </Text>
+      <Text backgroundColor={backgroundColor}> </Text>
     </>
   );
 }
@@ -235,28 +281,34 @@ function renderLineContent(
   const tokens = tokensForLine(line, highlightCache);
   const bold = !isUneditedLine(line.kind);
   const highlight = searchStyle(searchHighlight);
-  const diffBg =
-    line.kind === 'add'
-      ? theme.addedBg
-      : line.kind === 'delete'
-        ? theme.removedBg
-        : undefined;
+  const diffBg = diffBackground(line, theme);
+  const usedWidth = usedContentWidth(line, highlightCache, contentWidth);
 
   if (tokens) {
     switch (line.kind) {
       case 'add':
-        return renderTokens(
-          highlight && searchQuery
-            ? applySearchHighlight(tokens, searchQuery, highlight, contentWidth)
-            : truncateTokens(tokens, contentWidth),
-          { bold, backgroundColor: diffBg },
+        return (
+          <>
+            {renderTokens(
+              highlight && searchQuery
+                ? applySearchHighlight(tokens, searchQuery, highlight, contentWidth)
+                : truncateTokens(tokens, contentWidth),
+              { bold, backgroundColor: diffBg },
+            )}
+            {renderLinePadding(usedWidth, contentWidth, diffBg)}
+          </>
         );
       case 'delete':
-        return renderTokens(
-          highlight && searchQuery
-            ? applySearchHighlight(tokens, searchQuery, highlight, contentWidth)
-            : truncateTokens(tokens, contentWidth),
-          { bold, backgroundColor: diffBg },
+        return (
+          <>
+            {renderTokens(
+              highlight && searchQuery
+                ? applySearchHighlight(tokens, searchQuery, highlight, contentWidth)
+                : truncateTokens(tokens, contentWidth),
+              { bold, backgroundColor: diffBg },
+            )}
+            {renderLinePadding(usedWidth, contentWidth, diffBg)}
+          </>
         );
       case 'expanded-context':
         return renderTokens(
@@ -284,15 +336,25 @@ function renderLineContent(
 
   switch (line.kind) {
     case 'add':
-      return renderTextWithSearch(text, searchQuery ?? '', highlight, {
-        bold,
-        backgroundColor: diffBg,
-      });
+      return (
+        <>
+          {renderTextWithSearch(text, searchQuery ?? '', highlight, {
+            bold,
+            backgroundColor: diffBg,
+          })}
+          {renderLinePadding(usedWidth, contentWidth, diffBg)}
+        </>
+      );
     case 'delete':
-      return renderTextWithSearch(text, searchQuery ?? '', highlight, {
-        bold,
-        backgroundColor: diffBg,
-      });
+      return (
+        <>
+          {renderTextWithSearch(text, searchQuery ?? '', highlight, {
+            bold,
+            backgroundColor: diffBg,
+          })}
+          {renderLinePadding(usedWidth, contentWidth, diffBg)}
+        </>
+      );
     case 'expanded-context':
       return renderTextWithSearch(text, searchQuery ?? '', highlight, {
         color: theme.expandedContextFg,
@@ -366,6 +428,8 @@ export function DiffView({
                   : undefined;
               const highlightStyle = searchStyle(searchHighlight);
               const bold = !isUneditedLine(line.kind);
+              const diffBg =
+                searchHighlight === undefined ? diffBackground(line, theme) : undefined;
               return (
                 <Box key={absoluteIndex} paddingX={1}>
                   <Text
@@ -381,7 +445,7 @@ export function DiffView({
                         : undefined
                     }
                   >
-                    {renderGutter(line, theme, bold, highlightStyle)}
+                    {renderGutter(line, theme, bold, highlightStyle, diffBg)}
                     {renderLineContent(
                       line,
                       theme,
