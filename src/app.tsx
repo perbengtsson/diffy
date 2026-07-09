@@ -23,7 +23,7 @@ import {
 import { watchRepo } from './watch/repoWatcher.js';
 import { useTerminalSize } from './hooks/useTerminalSize.js';
 import { useMouse } from './hooks/useMouse.js';
-import type { MouseClick } from './mouse/parseMouse.js';
+import type { MouseEvent } from './mouse/parseMouse.js';
 import {
   buildFileTree,
   buildDirsWithChanges,
@@ -37,10 +37,13 @@ import {
   toggleDirCollapsed,
 } from './files/tree.js';
 import { buildChangeSummary } from './files/summary.js';
+import { scrollOffsetFromTrackRow, isScrollBarHit } from './components/scrollBar.js';
 import { findAllFileMatches, findLineMatches } from './search/search.js';
 import type { SearchMatch, SearchScope } from './search/types.js';
 
 type Focus = 'files' | 'diff';
+
+const WHEEL_SCROLL_LINES = 3;
 
 type Props = {
   initialSnapshot: DiffSnapshot;
@@ -80,6 +83,7 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
   const [allSearchLoading, setAllSearchLoading] = useState(false);
 
   const pendingSearchMatchRef = useRef<SearchMatch | null>(null);
+  const scrollbarDragRef = useRef(false);
 
   const selectedPathRef = useRef<string | undefined>(
     initialSnapshot.files[findFirstEditedIndex(initialSnapshot.files)]?.path,
@@ -91,6 +95,10 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
   const filePaneWidth = Math.max(25, Math.min(37, Math.floor(columns * 0.28) + 5));
   const diffPaneWidth = Math.max(30, columns - filePaneWidth - 1);
   const contentHeight = Math.max(5, rows - 2);
+  const scrollBarLayout = useMemo(
+    () => ({ columns, filePaneWidth, contentHeight, totalLines: displayLines.length }),
+    [columns, contentHeight, displayLines.length, filePaneWidth],
+  );
 
   const treeFiles = useMemo(
     () =>
@@ -386,13 +394,74 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
     [snapshot.files, visibleFileRows],
   );
 
-  const handleFileClick = useCallback(
-    (click: MouseClick) => {
-      if (click.x < 1 || click.x > filePaneWidth || click.y < 1 || click.y > contentHeight) {
+  const handleMouseEvent = useCallback(
+    (event: MouseEvent) => {
+      if (event.kind === 'wheel') {
+        const delta =
+          event.direction === 'down' ? WHEEL_SCROLL_LINES : -WHEEL_SCROLL_LINES;
+
+        if (
+          event.x >= 1 &&
+          event.x <= filePaneWidth &&
+          event.y >= 1 &&
+          event.y <= fileListHeight
+        ) {
+          setFocus('files');
+          setFileScroll((s) => Math.max(0, Math.min(maxFileScroll, s + delta)));
+          return;
+        }
+
+        if (
+          event.x > filePaneWidth &&
+          event.y >= 1 &&
+          event.y <= contentHeight
+        ) {
+          setFocus('diff');
+          setDiffScroll((s) => Math.max(0, Math.min(maxDiffScroll, s + delta)));
+        }
         return;
       }
 
-      const rowIndex = click.y - 1 + fileScroll;
+      if (event.kind === 'release') {
+        scrollbarDragRef.current = false;
+        return;
+      }
+
+      if (event.kind === 'drag') {
+        if (!scrollbarDragRef.current || displayLines.length === 0) return;
+        const trackRow = Math.max(0, Math.min(contentHeight - 1, event.y - 1));
+        const offset = scrollOffsetFromTrackRow(
+          trackRow,
+          contentHeight,
+          displayLines.length,
+          contentHeight,
+        );
+        setFocus('diff');
+        setDiffScroll(Math.max(0, Math.min(maxDiffScroll, offset)));
+        return;
+      }
+
+      if (event.kind !== 'click') return;
+
+      if (isScrollBarHit(event.x, event.y, scrollBarLayout)) {
+        scrollbarDragRef.current = true;
+        const trackRow = Math.max(0, Math.min(contentHeight - 1, event.y - 1));
+        const offset = scrollOffsetFromTrackRow(
+          trackRow,
+          contentHeight,
+          displayLines.length,
+          contentHeight,
+        );
+        setFocus('diff');
+        setDiffScroll(Math.max(0, Math.min(maxDiffScroll, offset)));
+        return;
+      }
+
+      if (event.x < 1 || event.x > filePaneWidth || event.y < 1 || event.y > contentHeight) {
+        return;
+      }
+
+      const rowIndex = event.y - 1 + fileScroll;
       if (rowIndex < 0 || rowIndex >= visibleFileRows.length) return;
 
       const row = visibleFileRows[rowIndex];
@@ -407,10 +476,21 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
 
       selectFileRow(rowIndex, true);
     },
-    [contentHeight, filePaneWidth, fileScroll, selectFileRow, visibleFileRows],
+    [
+      contentHeight,
+      displayLines.length,
+      fileListHeight,
+      filePaneWidth,
+      fileScroll,
+      maxDiffScroll,
+      maxFileScroll,
+      scrollBarLayout,
+      selectFileRow,
+      visibleFileRows,
+    ],
   );
 
-  useMouse(handleFileClick);
+  useMouse(handleMouseEvent);
 
   const openSearch = useCallback((scope: SearchScope) => {
     setSearchScope(scope);

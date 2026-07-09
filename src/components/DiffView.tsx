@@ -6,6 +6,7 @@ import type { HighlightToken } from '../highlight/tokens.js';
 import { truncateTokens } from '../highlight/tokens.js';
 import type { DisplayLine, DisplayLineKind } from '../diff/types.js';
 import type { Theme } from '../theme.js';
+import { SCROLLBAR_WIDTH, needsScrollBar } from './scrollBar.js';
 import { DiffScrollBar } from './DiffScrollBar.js';
 
 type Props = {
@@ -23,7 +24,6 @@ type Props = {
   emptyMessage?: string;
 };
 
-const SCROLLBAR_WIDTH = 1;
 const GUTTER_WIDTH = 8;
 type SearchHighlightStyle = { bg: string; fg: string };
 
@@ -338,9 +338,10 @@ export function DiffView({
   emptyMessage = 'Select a file to view its diff',
 }: Props) {
   const innerHeight = Math.max(1, height);
+  const showScrollBar = needsScrollBar(lines.length, innerHeight);
   const contentWidth = Math.max(
     10,
-    width - GUTTER_WIDTH - SCROLLBAR_WIDTH - 4,
+    width - GUTTER_WIDTH - (showScrollBar ? SCROLLBAR_WIDTH : 0) - 4,
   );
   const visible = lines.slice(scrollOffset, scrollOffset + innerHeight);
 
@@ -394,13 +395,15 @@ export function DiffView({
               );
             })}
           </Box>
-          <DiffScrollBar
-            lines={lines}
-            scrollOffset={scrollOffset}
-            viewportHeight={innerHeight}
-            height={innerHeight}
-            theme={theme}
-          />
+          {showScrollBar && (
+            <DiffScrollBar
+              lines={lines}
+              scrollOffset={scrollOffset}
+              viewportHeight={innerHeight}
+              height={innerHeight}
+              theme={theme}
+            />
+          )}
         </Box>
       )}
     </Box>

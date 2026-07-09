@@ -4,10 +4,10 @@ import {
   DISABLE_MOUSE,
   ENABLE_MOUSE,
   parseMouseEvent,
-  type MouseClick,
+  type MouseEvent,
 } from '../mouse/parseMouse.js';
 
-export function useMouse(onClick: (click: MouseClick) => void): void {
+export function useMouse(onEvent: (event: MouseEvent) => void): void {
   const { internal_eventEmitter } = useStdin();
   const { stdout } = useStdout();
 
@@ -15,8 +15,8 @@ export function useMouse(onClick: (click: MouseClick) => void): void {
     stdout.write(ENABLE_MOUSE);
 
     const handler = (chunk: string) => {
-      const click = parseMouseEvent(chunk);
-      if (click) onClick(click);
+      const event = parseMouseEvent(chunk);
+      if (event) onEvent(event);
     };
 
     internal_eventEmitter?.on('input', handler);
@@ -24,5 +24,5 @@ export function useMouse(onClick: (click: MouseClick) => void): void {
       internal_eventEmitter?.removeListener('input', handler);
       stdout.write(DISABLE_MOUSE);
     };
-  }, [internal_eventEmitter, onClick, stdout]);
+  }, [internal_eventEmitter, onEvent, stdout]);
 }

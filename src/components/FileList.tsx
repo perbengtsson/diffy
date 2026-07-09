@@ -104,9 +104,7 @@ export function FileList({
                 color={
                   selected
                     ? theme.selectedFg
-                    : highlighted
-                      ? theme.defaultFg
-                      : theme.dimFg
+                    : theme.defaultFg
                 }
                 dimColor={!highlighted && !selected}
               >

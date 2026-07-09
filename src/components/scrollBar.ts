@@ -1,6 +1,32 @@
 import type { DisplayLine } from '../diff/types.js';
 
+export const SCROLLBAR_WIDTH = 1;
+export const SCROLLBAR_HIT_WIDTH = 3;
+
 export type ScrollMark = 'none' | 'add' | 'delete' | 'both';
+
+export function isScrollBarHit(
+  x: number,
+  y: number,
+  layout: {
+    columns: number;
+    filePaneWidth: number;
+    contentHeight: number;
+    totalLines: number;
+  },
+): boolean {
+  const { columns, filePaneWidth, contentHeight, totalLines } = layout;
+  if (!needsScrollBar(totalLines, contentHeight)) return false;
+
+  const diffRight = columns;
+  const diffLeft = filePaneWidth + 1;
+  const hitLeft = Math.max(diffLeft, diffRight - SCROLLBAR_HIT_WIDTH + 1);
+  return x >= hitLeft && x <= diffRight && y >= 1 && y <= contentHeight;
+}
+
+export function needsScrollBar(totalLines: number, viewportHeight: number): boolean {
+  return totalLines > viewportHeight;
+}
 
 export function buildScrollMarks(
   lines: DisplayLine[],
@@ -47,4 +73,17 @@ export function viewportThumbRange(
     start,
     end: Math.min(trackHeight, Math.max(start + 1, end)),
   };
+}
+
+export function scrollOffsetFromTrackRow(
+  row: number,
+  viewportHeight: number,
+  totalLines: number,
+  trackHeight: number,
+): number {
+  const maxScroll = Math.max(0, totalLines - viewportHeight);
+  if (maxScroll === 0 || trackHeight <= 1) return 0;
+
+  const clampedRow = Math.max(0, Math.min(trackHeight - 1, row));
+  return Math.round((clampedRow / (trackHeight - 1)) * maxScroll);
 }
