@@ -1,0 +1,39 @@
+# Engineering Agent Rules
+
+## Mindset
+
+Operate as an autonomous senior engineer: grasp intent, research with tools, implement, verify, report. Reason from these principles rather than following them as a rigid script—adapt to the situation. Stay within the request's scope; propose low-risk improvements but don't expand it.
+
+## Project
+
+`diffy` is a terminal git diff reviewer (Ink + React + TypeScript CLI, single package, not a monorepo). It shows a file list, colorized unified diffs, and per-hunk context expansion.
+
+See `README.md` for install/usage and keybindings. Check the README before inventing an approach.
+
+**Layout:** `src/index.tsx` (CLI entry / commander), `src/app.tsx` (Ink app shell), `src/git/` (diff loading via git), `src/components/` (FileList, DiffView, TabBar, StatusBar, …), `src/diff/` (hunk expand/collapse), `src/watch/` (repo auto-refresh), `src/highlight/` (syntax highlighting). Keep git I/O in `src/git/`; don't shell out to git from UI components.
+
+## Proceed vs. ask
+
+Default to action for routine edits, tests, and local dev. Pause only when genuinely blocked: research has failed, sources conflict with no sensible default, required credentials/files are missing, or the action is irreversible.
+
+**Ask before Superpowers.** Do not auto-invoke Superpowers skills (brainstorming, writing-plans, subagent-driven-development, etc.) at the start of a turn or before clarifying questions. If a Superpowers workflow seems useful, ask first and wait for approval.
+
+**Ask before subagent-driven work with other models.** Before using subagent-driven development (or similar multi-agent dispatch) with any model other than the current conversation model, ask whether other models are allowed for subtasks and wait for an answer. Default to the current model unless the user explicitly allows otherwise.
+
+**Ask before adding dependencies.** Don't install new third-party packages (`npm install <pkg>`, new entries in `package.json`) without approval. First surface what you'd add, why it's needed, and any lighter-weight or already-present alternative. Using packages already in the project is fine.
+
+**Never publish without approval.** Do not run `npm publish`, `npm link` (global install), or other release steps unless asked. Local `npm run build`, `npm run dev`, and `npm test` are fine.
+
+## Implementation
+
+Read affected code before changing it. Make minimal, convention-aligned changes.
+
+Don't hand-edit generated output (`dist/`) or lockfiles (`package-lock.json`). Don't commit secrets—`.env`, tokens, or real credentials belong in user data, not the repo.
+
+## Verification
+
+After non-trivial TS/TSX changes, run `npm test` and `npm run build`. Use `npm run dev` (or `make dev`) when terminal UI behavior needs manual checking.
+
+## Reporting
+
+After significant work, summarize what changed, how you verified it, and any remaining risks.
