@@ -24,7 +24,8 @@ type Props = {
   emptyMessage?: string;
 };
 
-const GUTTER_WIDTH = 8;
+/** old(4) + new(4) + separator(1) */
+const GUTTER_WIDTH = 9;
 type SearchHighlightStyle = { bg: string; fg: string };
 
 const SEARCH_MATCH: SearchHighlightStyle = { bg: 'yellow', fg: 'black' };
@@ -403,7 +404,7 @@ export function DiffView({
   const showScrollBar = needsScrollBar(lines.length, innerHeight);
   const contentWidth = Math.max(
     10,
-    width - GUTTER_WIDTH - (showScrollBar ? SCROLLBAR_WIDTH : 0) - 4,
+    width - GUTTER_WIDTH - (showScrollBar ? SCROLLBAR_WIDTH : 0),
   );
   const visible = lines.slice(scrollOffset, scrollOffset + innerHeight);
 
@@ -431,7 +432,7 @@ export function DiffView({
               const diffBg =
                 searchHighlight === undefined ? diffBackground(line, theme) : undefined;
               return (
-                <Box key={absoluteIndex} paddingX={1}>
+                <Box key={absoluteIndex}>
                   <Text
                     bold={bold}
                     backgroundColor={
