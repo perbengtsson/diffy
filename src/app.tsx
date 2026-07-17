@@ -867,6 +867,7 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
           <TabBar
             tabs={fileTabs.tabs}
             activePath={fileTabs.activePath}
+            contentFocused={focus === 'diff'}
             width={diffPaneWidth}
             theme={theme}
           />

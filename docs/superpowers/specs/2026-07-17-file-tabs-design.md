@@ -13,9 +13,9 @@ Add a top tab bar on the right (diff) pane so the current file appears as a tab.
 - One-row tab bar at the **top of the right pane only** (above `DiffView`).
 - Diff content height shrinks by 1 row; left file pane and bottom status bar unchanged.
 - Tab label: **basename** (full path remains in the status bar).
-- **Preview** tab: dim (`dimColor`).
-- **Pinned** tabs: normal weight.
-- **Active** tab: selected background/foreground (same idea as file-list selection).
+- **Preview** tab: softer text (`tabPreviewFg`) always.
+- **Pinned** tabs: normal bright text.
+- **Active** tab: selected background only while the content pane is focused (not while browsing the file tree).
 - Optional `×` after each tab for mouse close.
 - Overflow: truncate labels and clip the row. No overflow menu in v1.
 

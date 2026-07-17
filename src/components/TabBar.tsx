@@ -6,11 +6,13 @@ import { layoutTabBar } from './tabBarLayout.js';
 type Props = {
   tabs: FileTab[];
   activePath: string | null;
+  /** True when the diff/content pane has focus — marks the active preview tab. */
+  contentFocused: boolean;
   width: number;
   theme: Theme;
 };
 
-export function TabBar({ tabs, activePath, width, theme }: Props) {
+export function TabBar({ tabs, activePath, contentFocused, width, theme }: Props) {
   const hits = layoutTabBar(tabs, width);
 
   return (
@@ -20,14 +22,22 @@ export function TabBar({ tabs, activePath, width, theme }: Props) {
       ) : (
         hits.map((hit) => {
           const active = hit.path === activePath;
-          const emphasize = hit.pinned || active;
+          const preview = !hit.pinned;
+          // Mark the active tab only while the content pane is focused — not while
+          // browsing the file tree (preview stays softer-colored either way).
+          const selected = active && contentFocused;
           return (
             <Text
               key={hit.path}
-              backgroundColor={active ? theme.selectedBg : undefined}
-              color={active ? theme.selectedFg : emphasize ? theme.defaultFg : theme.dimFg}
-              dimColor={!emphasize}
-              bold={emphasize}
+              backgroundColor={selected ? theme.selectedBg : undefined}
+              color={
+                preview
+                  ? theme.tabPreviewFg
+                  : selected
+                    ? theme.selectedFg
+                    : theme.defaultFg
+              }
+              bold
             >
               {` ${hit.label} `}
               <Text color={theme.dimFg}>×</Text>
