@@ -47,6 +47,12 @@ import {
   EMPTY_FILE_TABS,
   preview,
 } from './files/tabs.js';
+import {
+  pruneTabViews,
+  recallTabView,
+  rememberTabView,
+  type TabViewState,
+} from './files/tabView.js';
 import { scrollOffsetFromTrackRow, isScrollBarHit } from './components/scrollBar.js';
 import { findAllFileMatches, findLineMatches } from './search/search.js';
 import type { SearchMatch, SearchScope } from './search/types.js';
@@ -93,6 +99,10 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
   const scrollbarDragRef = useRef(false);
   const doubleClickRef = useRef(EMPTY_DOUBLE_CLICK);
   const ensureFileVisibleRef = useRef<string | null>(null);
+  const tabViewsRef = useRef<Map<string, TabViewState>>(new Map());
+  const prevActivePathRef = useRef<string | null>(null);
+  const viewStateRef = useRef({ cursorLine, diffScroll, expansions });
+  viewStateRef.current = { cursorLine, diffScroll, expansions };
 
   const initialPath =
     initialSnapshot.files[findFirstEditedIndex(initialSnapshot.files)]?.path;
@@ -200,10 +210,36 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
   }, [fileTabs.activePath, visibleFileRows]);
 
   useEffect(() => {
-    setExpansions(new Map());
-    setDiffScroll(0);
-    setCursorLine(0);
+    const prevPath = prevActivePathRef.current;
+    if (prevPath) {
+      tabViewsRef.current = rememberTabView(
+        tabViewsRef.current,
+        prevPath,
+        viewStateRef.current,
+      );
+    }
+
+    const nextPath = fileTabs.activePath;
+    prevActivePathRef.current = nextPath;
+    if (!nextPath) {
+      setExpansions(new Map());
+      setDiffScroll(0);
+      setCursorLine(0);
+      return;
+    }
+
+    const restored = recallTabView(tabViewsRef.current, nextPath);
+    setCursorLine(restored.cursorLine);
+    setDiffScroll(restored.diffScroll);
+    setExpansions(restored.expansions);
   }, [fileTabs.activePath]);
+
+  useEffect(() => {
+    tabViewsRef.current = pruneTabViews(
+      tabViewsRef.current,
+      new Set(fileTabs.tabs.map((t) => t.path)),
+    );
+  }, [fileTabs.tabs]);
 
   useEffect(() => {
     if (!selectedFile) {
@@ -422,7 +458,10 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
   useEffect(() => {
     setFileScroll((s) => Math.min(s, maxFileScroll));
     setDiffScroll((s) => Math.min(s, maxDiffScroll));
-  }, [maxFileScroll, maxDiffScroll]);
+    setCursorLine((c) =>
+      Math.min(c, Math.max(0, displayLines.length - 1)),
+    );
+  }, [displayLines.length, maxFileScroll, maxDiffScroll]);
 
   const selectFileRow = useCallback(
     (nextRow: number, openDiff = false) => {
