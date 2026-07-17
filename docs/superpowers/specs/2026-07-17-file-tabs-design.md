@@ -13,9 +13,9 @@ Add a top tab bar on the right (diff) pane so the current file appears as a tab.
 - One-row tab bar at the **top of the right pane only** (above `DiffView`).
 - Diff content height shrinks by 1 row; left file pane and bottom status bar unchanged.
 - Tab label: **basename** (full path remains in the status bar).
-- **Preview** tab: dim (`dimColor`).
-- **Pinned** tabs: normal weight.
-- **Active** tab: selected background/foreground (same idea as file-list selection).
+- **Preview** tab: softer text (`tabPreviewFg`) always.
+- **Pinned** tabs: normal bright text.
+- **Active** tab: selected background only while the content pane is focused (not while browsing the file tree).
 - Optional `×` after each tab for mouse close.
 - Overflow: truncate labels and clip the row. No overflow menu in v1.
 
@@ -30,7 +30,7 @@ Owned by `useFileTabs`:
 
 Each tab: `{ path: string; pinned: boolean }`.
 
-Ordering: new preview tabs are **appended** after existing tabs; replacing a preview keeps the same index. Pin upgrades in place.
+Ordering: the preview tab is always **leftmost**; pinned tabs keep insertion order to its right. Replacing a preview updates the leftmost slot. Pin upgrades in place.
 
 Open file: the diff pane’s open file is `activePath` from the hook. When there are no tabs, there is no open file (`activePath` is `null`) even if the file list still has a cursor row — `App` must not treat the cursor row alone as the open file for diff/tabs.
 

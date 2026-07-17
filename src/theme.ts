@@ -14,6 +14,8 @@ export type Theme = {
   statusFg: string;
   dimFg: string;
   defaultFg: string;
+  /** Temporary tab label — gray / softer than pinned `defaultFg`. */
+  tabPreviewFg: string;
 };
 
 function isLightTerminal(): boolean {
@@ -61,6 +63,8 @@ export function getTheme(): Theme {
       statusFg: 'black',
       dimFg: 'gray',
       defaultFg: 'black',
+      // Muted vs pinned black — still readable with bold tab labels.
+      tabPreviewFg: 'gray',
     };
   }
   return {
@@ -77,5 +81,7 @@ export function getTheme(): Theme {
     statusFg: 'whiteBright',
     dimFg: 'gray',
     defaultFg: 'whiteBright',
+    // Softer than pinned whiteBright; ansi250 stays readable without dimColor.
+    tabPreviewFg: 'ansi256(250)',
   };
 }

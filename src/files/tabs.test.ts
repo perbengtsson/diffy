@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import {
   EMPTY_FILE_TABS,
   activate,
+  activateRelative,
   close,
   pin,
   preview,
@@ -17,16 +18,27 @@ describe('preview', () => {
     assert.equal(next.activePath, 'a.ts');
   });
 
-  it('replaces the previous preview in place', () => {
+  it('keeps the preview leftmost when replacing', () => {
     let state = preview(EMPTY_FILE_TABS, 'a.ts');
     state = pin(state, 'a.ts');
     state = preview(state, 'b.ts');
     state = preview(state, 'c.ts');
     assert.deepEqual(state.tabs, [
-      { path: 'a.ts', pinned: true },
       { path: 'c.ts', pinned: false },
+      { path: 'a.ts', pinned: true },
     ]);
     assert.equal(state.activePath, 'c.ts');
+  });
+
+  it('inserts a new preview before existing pinned tabs', () => {
+    let state = pin(EMPTY_FILE_TABS, 'a.ts');
+    state = pin(state, 'b.ts');
+    state = preview(state, 'c.ts');
+    assert.deepEqual(state.tabs, [
+      { path: 'c.ts', pinned: false },
+      { path: 'a.ts', pinned: true },
+      { path: 'b.ts', pinned: true },
+    ]);
   });
 
   it('activates an already-pinned path without duplicating', () => {
@@ -74,6 +86,30 @@ describe('activate', () => {
   it('is a no-op when path is not open', () => {
     const state = pin(EMPTY_FILE_TABS, 'a.ts');
     assert.deepEqual(activate(state, 'missing.ts'), state);
+  });
+});
+
+describe('activateRelative', () => {
+  it('moves right and left among tabs', () => {
+    let state = preview(EMPTY_FILE_TABS, 'preview.ts');
+    state = pin(state, 'a.ts');
+    state = pin(state, 'b.ts');
+    state = activate(state, 'preview.ts');
+    state = activateRelative(state, 1);
+    assert.equal(state.activePath, 'a.ts');
+    state = activateRelative(state, 1);
+    assert.equal(state.activePath, 'b.ts');
+    state = activateRelative(state, -1);
+    assert.equal(state.activePath, 'a.ts');
+  });
+
+  it('is a no-op at the edges', () => {
+    let state = pin(EMPTY_FILE_TABS, 'a.ts');
+    state = pin(state, 'b.ts');
+    state = activate(state, 'a.ts');
+    assert.deepEqual(activateRelative(state, -1), state);
+    state = activate(state, 'b.ts');
+    assert.deepEqual(activateRelative(state, 1), state);
   });
 });
 
