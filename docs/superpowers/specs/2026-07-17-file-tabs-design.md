@@ -30,7 +30,7 @@ Owned by `useFileTabs`:
 
 Each tab: `{ path: string; pinned: boolean }`.
 
-Ordering: new preview tabs are **appended** after existing tabs; replacing a preview keeps the same index. Pin upgrades in place.
+Ordering: the preview tab is always **leftmost**; pinned tabs keep insertion order to its right. Replacing a preview updates the leftmost slot. Pin upgrades in place.
 
 Open file: the diff pane’s open file is `activePath` from the hook. When there are no tabs, there is no open file (`activePath` is `null`) even if the file list still has a cursor row — `App` must not treat the cursor row alone as the open file for diff/tabs.
 

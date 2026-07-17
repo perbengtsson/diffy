@@ -774,7 +774,20 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
       const last = Math.max(0, displayLines.length - 1);
       setCursorLine(last);
       setDiffScroll(Math.max(0, displayLines.length - diffHeight));
-    } else if (input === 'h' || key.leftArrow) {
+    } else if (key.leftArrow) {
+      if (fileTabs.tabs.length === 0) {
+        setFocus('files');
+        return;
+      }
+      const index = fileTabs.tabs.findIndex((t) => t.path === fileTabs.activePath);
+      if (index <= 0) {
+        setFocus('files');
+        return;
+      }
+      fileTabs.activateRelative(-1);
+    } else if (key.rightArrow) {
+      fileTabs.activateRelative(1);
+    } else if (input === 'h') {
       setFocus('files');
     } else if (input === '{' || (key.ctrl && input === 'u')) {
       const hunk = findHunkAtLine(displayLines, cursorLine, hunks);

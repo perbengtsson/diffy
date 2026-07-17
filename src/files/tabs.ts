@@ -17,14 +17,9 @@ export function preview(state: FileTabsState, path: string): FileTabsState {
     return withActive(state.tabs, path);
   }
 
-  const previewIndex = state.tabs.findIndex((t) => !t.pinned);
-  if (previewIndex >= 0) {
-    const tabs = state.tabs.slice();
-    tabs[previewIndex] = { path, pinned: false };
-    return withActive(tabs, path);
-  }
-
-  return withActive([...state.tabs, { path, pinned: false }], path);
+  // Preview is always leftmost; pinned tabs keep their relative order.
+  const pinned = state.tabs.filter((t) => t.pinned);
+  return withActive([{ path, pinned: false }, ...pinned], path);
 }
 
 export function pin(state: FileTabsState, path: string): FileTabsState {
@@ -40,6 +35,19 @@ export function pin(state: FileTabsState, path: string): FileTabsState {
 export function activate(state: FileTabsState, path: string): FileTabsState {
   if (!state.tabs.some((t) => t.path === path)) return state;
   return withActive(state.tabs, path);
+}
+
+/** Move active tab by `delta` (-1 left, +1 right). No-op at edges or if none active. */
+export function activateRelative(
+  state: FileTabsState,
+  delta: -1 | 1,
+): FileTabsState {
+  if (state.tabs.length === 0 || !state.activePath) return state;
+  const index = state.tabs.findIndex((t) => t.path === state.activePath);
+  if (index < 0) return state;
+  const next = index + delta;
+  if (next < 0 || next >= state.tabs.length) return state;
+  return withActive(state.tabs, state.tabs[next]!.path);
 }
 
 export function close(state: FileTabsState, path?: string): FileTabsState {

@@ -28,6 +28,7 @@ Watching is on by default: diffy refreshes when files change or when you stage/u
 |-----|--------|
 | `Tab` | Switch focus between file list and diff |
 | `j`/`k`, arrows | Navigate files (preview tab) or scroll diff |
+| `←` / `→` | Switch tabs (diff focus; `←` on first tab returns to files) |
 | `Enter` | Pin tab |
 | `Space` / `l` | Open / focus diff |
 | Double-click | Pin tab (file list or preview tab) |
@@ -38,4 +39,4 @@ Watching is on by default: diffy refreshes when files change or when you stage/u
 | `r` | Refresh |
 | `q` | Quit |
 
-Arrow navigation in the file list opens a dim preview tab until the file is pinned with Enter or a double-click.
+Arrow navigation in the file list opens a dim preview tab (leftmost) until the file is pinned with Enter or a double-click.
