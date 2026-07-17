@@ -32,7 +32,7 @@ export function layoutTabBar(tabs: FileTab[], width: number): TabHit[] {
   for (const tab of tabs) {
     if (x >= width) break;
 
-    const closeWidth = 1 + CLOSE.length; // space + ×
+    const closeWidth = CLOSE.length; // × only — matches TabBar paint (PAD + label + PAD + ×)
     const minWidth = 2 + closeWidth; // at least one char label + close
     const remaining = width - x;
     if (remaining < minWidth) break;

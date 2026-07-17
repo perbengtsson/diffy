@@ -46,4 +46,11 @@ describe('hitTestTab', () => {
     assert.deepEqual(hitTestTab(hits, tab.closeX0), { path: 'a.ts', close: true });
     assert.equal(hitTestTab(hits, tab.x1 + 1), null);
   });
+
+  it('close width matches TabBar paint (PAD + label + PAD + ×)', () => {
+    const hits = layoutTabBar([{ path: 'a.ts', pinned: true }], 40);
+    const tab = hits[0]!;
+    assert.equal(tab.closeX1 - tab.closeX0 + 1, 1);
+    assert.equal(tab.x1 - tab.x0 + 1, 1 + tab.label.length + 1 + 1);
+  });
 });
