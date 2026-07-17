@@ -40,7 +40,7 @@ export function TabBar({ tabs, activePath, contentFocused, width, theme }: Props
               bold
             >
               {` ${hit.label} `}
-              <Text color={theme.dimFg}>×</Text>
+              <Text color={selected ? theme.selectedFg : theme.dimFg}>×</Text>
             </Text>
           );
         })
