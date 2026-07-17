@@ -72,10 +72,10 @@ export function getTheme(): Theme {
     hunkHeaderFg: 'cyan',
     expandedContextFg: 'blue',
     selectedBg: 'blue',
-    selectedFg: 'white',
+    selectedFg: 'whiteBright',
     borderFg: 'gray',
-    statusFg: 'white',
+    statusFg: 'whiteBright',
     dimFg: 'gray',
-    defaultFg: 'white',
+    defaultFg: 'whiteBright',
   };
 }
