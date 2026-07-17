@@ -67,9 +67,6 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
   const theme = useMemo(() => getTheme(), []);
 
   const [snapshot, setSnapshot] = useState(initialSnapshot);
-  const [, setSelectedIndex] = useState(() =>
-    findFirstEditedIndex(initialSnapshot.files),
-  );
   const [fileRowIndex, setFileRowIndex] = useState(0);
   const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(() =>
     buildInitialCollapsedDirs(initialSnapshot.files),
@@ -103,7 +100,6 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
     initialPath ? preview(EMPTY_FILE_TABS, initialPath) : EMPTY_FILE_TABS,
   );
 
-  const selectedPathRef = useRef<string | undefined>(initialPath);
   const refreshingRef = useRef(false);
   const modeRef = useRef(initialSnapshot.mode);
   modeRef.current = snapshot.mode;
@@ -151,27 +147,16 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
     ? snapshot.files.find((f) => f.path === fileTabs.activePath)
     : undefined;
 
-  useEffect(() => {
-    selectedPathRef.current = fileTabs.activePath ?? undefined;
-  }, [fileTabs.activePath]);
-
   const refresh = useCallback(async () => {
     if (refreshingRef.current) return;
     refreshingRef.current = true;
     setRefreshing(true);
     try {
       setError(null);
-      const prevPath = selectedPathRef.current;
       const next = await loadDiffSnapshot(cwd, modeRef.current);
       setSnapshot(next);
       setCollapsedDirs((prev) => pruneCollapsedDirs(prev, next.files));
       fileTabs.prune(new Set(next.files.map((f) => f.path)));
-      if (prevPath) {
-        const idx = next.files.findIndex((f) => f.path === prevPath);
-        if (idx >= 0) setSelectedIndex(idx);
-      } else {
-        setSelectedIndex(findFirstEditedIndex(next.files));
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -193,10 +178,21 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
 
   useEffect(() => {
     if (!fileTabs.activePath) return;
-    const idx = snapshot.files.findIndex((f) => f.path === fileTabs.activePath);
-    if (idx >= 0) setSelectedIndex(idx);
-    setCollapsedDirs((prev) => expandDirsForPath(prev, fileTabs.activePath!));
-  }, [fileTabs.activePath, snapshot.files]);
+    setCollapsedDirs((prev) => {
+      const next = expandDirsForPath(prev, fileTabs.activePath!);
+      if (next.size === prev.size) {
+        let unchanged = true;
+        for (const dir of prev) {
+          if (!next.has(dir)) {
+            unchanged = false;
+            break;
+          }
+        }
+        if (unchanged) return prev;
+      }
+      return next;
+    });
+  }, [fileTabs.activePath]);
 
   useEffect(() => {
     if (!fileTabs.activePath) return;
@@ -387,10 +383,9 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
 
       if (match.filePath !== selectedFile?.path) {
         pendingSearchMatchRef.current = match;
-        const idx = snapshot.files.findIndex((file) => file.path === match.filePath);
-        if (idx < 0) return;
-        setSelectedIndex(idx);
+        if (!snapshot.files.some((file) => file.path === match.filePath)) return;
         setCollapsedDirs((prev) => expandDirsForPath(prev, match.filePath));
+        // Intentional: search jump pins so activePath stays the open-file source of truth.
         fileTabs.pin(match.filePath);
         setFocus('diff');
         return;
@@ -436,12 +431,10 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
       setFileRowIndex(nextRow);
       const row = visibleFileRows[nextRow];
       if (row?.node.kind === 'file') {
-        const idx = snapshot.files.findIndex((f) => f.path === row.node.path);
-        if (idx >= 0) setSelectedIndex(idx);
         fileTabs.preview(row.node.path);
       }
     },
-    [fileTabs.preview, snapshot.files, visibleFileRows],
+    [fileTabs.preview, visibleFileRows],
   );
 
   const handleMouseEvent = useCallback(
@@ -540,8 +533,6 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
           fileTabs.activate(hit.path);
         }
 
-        const idx = snapshot.files.findIndex((f) => f.path === hit.path);
-        if (idx >= 0) setSelectedIndex(idx);
         setCollapsedDirs((prev) => expandDirsForPath(prev, hit.path));
         ensureFileVisibleRef.current = hit.path;
         setFocus('diff');
@@ -593,7 +584,6 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
       maxFileScroll,
       scrollBarLayout,
       selectFileRow,
-      snapshot.files,
       tabBarHeight,
       visibleFileRows,
     ],
