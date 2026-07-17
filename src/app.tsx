@@ -578,6 +578,20 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
         return;
       }
 
+      if (
+        event.x > filePaneWidth &&
+        event.x <= filePaneWidth + diffPaneWidth &&
+        event.y >= 1 + tabBarHeight &&
+        event.y <= contentHeight
+      ) {
+        setFocus('diff');
+        if (displayLines.length === 0) return;
+        const lineIndex = event.y - 1 - tabBarHeight + diffScroll;
+        if (lineIndex < 0 || lineIndex >= displayLines.length) return;
+        setCursorLine(lineIndex);
+        return;
+      }
+
       if (event.x < 1 || event.x > filePaneWidth || event.y < 1 || event.y > contentHeight) {
         return;
       }
@@ -611,6 +625,7 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
       contentHeight,
       diffHeight,
       diffPaneWidth,
+      diffScroll,
       displayLines.length,
       fileListHeight,
       filePaneWidth,
@@ -828,6 +843,8 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
       fileTabs.activateRelative(1);
     } else if (input === 'h') {
       setFocus('files');
+    } else if (key.return && fileTabs.activePath) {
+      fileTabs.pin(fileTabs.activePath);
     } else if (input === '{' || (key.ctrl && input === 'u')) {
       const hunk = findHunkAtLine(displayLines, cursorLine, hunks);
       if (hunk) setExpansions((e) => expandHunk(e, hunk.id, 'before'));
