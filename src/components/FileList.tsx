@@ -14,20 +14,19 @@ type Props = {
   dirsWithChanges: ReadonlySet<string>;
 };
 
-function statusBadge(status: DiffFile['status']): string {
+function statusColor(status: DiffFile['status'], theme: Theme): string | undefined {
   switch (status) {
     case 'added':
-      return 'A';
-    case 'deleted':
-      return 'D';
-    case 'renamed':
-      return 'R';
     case 'untracked':
-      return '?';
+      return theme.addedFg;
+    case 'deleted':
+      return theme.removedFg;
+    case 'renamed':
+      return theme.hunkHeaderFg;
+    case 'modified':
+      return 'yellow';
     case 'unchanged':
-      return ' ';
-    default:
-      return 'M';
+      return undefined;
   }
 }
 
@@ -75,9 +74,7 @@ export function FileList({
               ? row.isExpanded
                 ? '▾ '
                 : '▸ '
-              : selected
-                ? '● '
-                : '  ';
+              : '';
           const file = row.node.file;
           const highlighted =
             row.node.kind === 'dir'
@@ -85,44 +82,27 @@ export function FileList({
               : file
                 ? isEditedFile(file)
                 : false;
-          const statusPrefix =
-            row.node.kind === 'file'
-              ? highlighted && file
-                ? `${statusBadge(file.status)} `
-                : '  '
-              : '  ';
           const label =
             row.node.kind === 'dir' ? `${row.node.name}/` : row.node.name;
-          const gutterLen = indent.length + treePrefix.length + statusPrefix.length;
+          const gutterLen = indent.length + treePrefix.length;
           const labelWidth = Math.max(4, width - gutterLen - 6);
+          const color =
+            file && highlighted
+              ? statusColor(file.status, theme)
+              : selected
+                ? theme.selectedFg
+                : theme.defaultFg;
 
           return (
             <Box key={`${row.node.path}:${index}`} paddingX={1}>
               <Text
                 bold={highlighted}
                 backgroundColor={selected ? theme.selectedBg : undefined}
-                color={
-                  selected
-                    ? theme.selectedFg
-                    : theme.defaultFg
-                }
+                color={color}
                 dimColor={!highlighted && !selected}
               >
                 {indent}
                 {treePrefix}
-                {row.node.kind === 'file' && highlighted && file ? (
-                  <>
-                    <Text
-                      bold
-                      color={selected ? theme.selectedFg : theme.hunkHeaderFg}
-                    >
-                      {statusBadge(file.status)}
-                    </Text>
-                    {' '}
-                  </>
-                ) : (
-                  statusPrefix
-                )}
                 {truncateName(label, labelWidth)}
                 {row.node.kind === 'file' && file && highlighted && (file.additions > 0 || file.deletions > 0) && (
                   <Text bold color={theme.dimFg}>
