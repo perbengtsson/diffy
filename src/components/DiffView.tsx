@@ -436,7 +436,7 @@ export function DiffView({
                     bold={bold}
                     backgroundColor={
                       atCursor && searchHighlight === undefined
-                        ? theme.borderFg
+                        ? theme.selectedBg
                         : undefined
                     }
                     color={
