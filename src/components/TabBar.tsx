@@ -20,18 +20,17 @@ export function TabBar({ tabs, activePath, width, theme }: Props) {
       ) : (
         hits.map((hit) => {
           const active = hit.path === activePath;
+          const emphasize = hit.pinned || active;
           return (
             <Text
               key={hit.path}
               backgroundColor={active ? theme.selectedBg : undefined}
-              color={active ? theme.selectedFg : theme.defaultFg}
-              dimColor={!hit.pinned && !active}
-              bold={hit.pinned || active}
+              color={active ? theme.selectedFg : emphasize ? theme.defaultFg : theme.dimFg}
+              dimColor={!emphasize}
+              bold={emphasize}
             >
-              {' '}
-              {hit.label}
-              {' '}
-              <Text dimColor>×</Text>
+              {` ${hit.label} `}
+              <Text color={theme.dimFg}>×</Text>
             </Text>
           );
         })

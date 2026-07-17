@@ -740,7 +740,6 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
         setCollapsedDirs((prev) => toggleDirCollapsed(prev, currentRow.node.path));
       } else if (key.return && currentRow?.node.kind === 'file') {
         fileTabs.pin(currentRow.node.path);
-        setFocus('diff');
       } else if (
         input === 'l' ||
         key.rightArrow ||

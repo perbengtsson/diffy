@@ -28,7 +28,8 @@ Watching is on by default: diffy refreshes when files change or when you stage/u
 |-----|--------|
 | `Tab` | Switch focus between file list and diff |
 | `j`/`k`, arrows | Navigate files (preview tab) or scroll diff |
-| `Enter` | Pin tab / open diff |
+| `Enter` | Pin tab |
+| `Space` / `l` | Open / focus diff |
 | Double-click | Pin tab (file list or preview tab) |
 | `w` | Close active tab |
 | `{` / `}` | Expand context up/down around current hunk |
