@@ -1029,8 +1029,6 @@ export function App({
   useInput((input, key) => {
     if (input.startsWith('\x1b[<')) return;
 
-    const isFindKey = input === 'f' || input === 'F';
-
     if (commentOpen) {
       if (key.escape) {
         setCommentOpen(false);
@@ -1129,21 +1127,6 @@ export function App({
       return;
     }
 
-    if (key.meta && isFindKey) {
-      openSearch('all');
-      return;
-    }
-
-    if (key.ctrl && key.shift && (isFindKey || input === '')) {
-      openSearch('all');
-      return;
-    }
-
-    if (key.ctrl && isFindKey) {
-      openSearch('file');
-      return;
-    }
-
     if (searchOpen) {
       if (key.tab) {
         setSearchScope((scope) => (scope === 'file' ? 'all' : 'file'));
@@ -1153,15 +1136,11 @@ export function App({
         closeSearch();
         return;
       }
-      if (key.return) {
+      if (key.downArrow) {
         stepSearchMatch(1);
         return;
       }
-      if (input === 'n' && !key.ctrl && !key.meta) {
-        stepSearchMatch(1);
-        return;
-      }
-      if (input === 'N') {
+      if (key.upArrow) {
         stepSearchMatch(-1);
         return;
       }
@@ -1178,6 +1157,11 @@ export function App({
 
     if (input === 'q' || (key.ctrl && input === 'c')) {
       quitApp();
+      return;
+    }
+
+    if (input === 'f') {
+      openSearch('file');
       return;
     }
 

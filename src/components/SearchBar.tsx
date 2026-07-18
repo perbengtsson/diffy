@@ -40,7 +40,7 @@ export function SearchBar({
         {' '}
         <Text dimColor color={theme.dimFg}>{status}</Text>
         <Text dimColor color={theme.dimFg}>
-          {' '}| Tab:scope Enter/n:next N:prev Esc:close
+          {' '}| Tab:scope ↑/↓:match Esc:close
         </Text>
       </Text>
     </Box>
