@@ -28,6 +28,11 @@ import {
   upsertComment,
 } from './review/store.js';
 import type { ReviewComment, ReviewSession } from './review/types.js';
+import {
+  findNextGlobalChangeBlock,
+  findPrevGlobalChangeBlock,
+  type ChangeLocation,
+} from './diff/changeBlocks.js';
 import { buildDisplayLines } from './diff/expand.js';
 import type { DisplayLine } from './diff/types.js';
 import {
@@ -50,6 +55,7 @@ import {
   findFirstEditedIndex,
   findRowIndexForPath,
   flattenFileTree,
+  flattenFilesInTreeOrder,
   expandDirsForPath,
   isEditedFile,
   pruneCollapsedDirs,
@@ -66,7 +72,7 @@ import {
   rememberTabView,
   type TabViewState,
 } from './files/tabView.js';
-import { scrollOffsetFromTrackRow, isScrollBarHit } from './components/scrollBar.js';
+import { scrollOffsetFromTrackRow, isScrollBarHit, centeredScrollOffset } from './components/scrollBar.js';
 import { findAllFileMatches, findLineMatches } from './search/search.js';
 import type { SearchMatch, SearchScope } from './search/types.js';
 
@@ -137,6 +143,8 @@ export function App({
 
   const pendingSearchMatchRef = useRef<SearchMatch | null>(null);
   const pendingReviewJumpRef = useRef<ReviewComment | null>(null);
+  const pendingChangeJumpRef = useRef<ChangeLocation | null>(null);
+  const changeNavBusyRef = useRef(false);
   const reviewSessionRef = useRef(reviewSession);
   reviewSessionRef.current = reviewSession;
   const reviewPathRef = useRef(reviewPath);
@@ -191,6 +199,10 @@ export function App({
     [snapshot.files, showUnedited],
   );
   const fileTree = useMemo(() => buildFileTree(treeFiles), [treeFiles]);
+  const filesInTreeOrder = useMemo(
+    () => flattenFilesInTreeOrder(buildFileTree(snapshot.files)),
+    [snapshot.files],
+  );
   const dirsWithChanges = useMemo(
     () => buildDirsWithChanges(snapshot.files),
     [snapshot.files],
@@ -496,16 +508,12 @@ export function App({
   const scrollToLine = useCallback(
     (lineIndex: number) => {
       setCursorLine(lineIndex);
-      setDiffScroll((scroll) => {
-        if (lineIndex < scroll) return lineIndex;
-        if (lineIndex >= scroll + diffHeight) {
-          return Math.min(maxDiffScroll, lineIndex - diffHeight + 1);
-        }
-        return scroll;
-      });
+      setDiffScroll(
+        centeredScrollOffset(lineIndex, diffHeight, displayLines.length),
+      );
       setFocus('diff');
     },
-    [diffHeight, maxDiffScroll],
+    [diffHeight, displayLines.length],
   );
 
   const goToSearchMatch = useCallback(
@@ -525,6 +533,61 @@ export function App({
       scrollToLine(match.lineIndex);
     },
     [fileTabs.pin, scrollToLine, selectedFile?.path, snapshot.files],
+  );
+
+  const goToChangeLocation = useCallback(
+    (location: ChangeLocation | null) => {
+      if (!location) return;
+
+      if (location.filePath !== selectedFile?.path) {
+        pendingChangeJumpRef.current = location;
+        if (!snapshot.files.some((file) => file.path === location.filePath)) {
+          return;
+        }
+        setCollapsedDirs((prev) => expandDirsForPath(prev, location.filePath));
+        fileTabs.pin(location.filePath);
+        setFocus('diff');
+        return;
+      }
+
+      scrollToLine(location.lineIndex);
+    },
+    [fileTabs.pin, scrollToLine, selectedFile?.path, snapshot.files],
+  );
+
+  const jumpChangeBlock = useCallback(
+    (direction: 1 | -1) => {
+      if (changeNavBusyRef.current) return;
+      changeNavBusyRef.current = true;
+      const find =
+        direction === 1 ? findNextGlobalChangeBlock : findPrevGlobalChangeBlock;
+      void find(
+        filesInTreeOrder,
+        snapshot.mode,
+        snapshot.repoRoot,
+        selectedFile?.path ?? null,
+        cursorLine,
+        displayLines,
+      )
+        .then((location) => {
+          goToChangeLocation(location);
+        })
+        .catch((err) => {
+          setError(err instanceof Error ? err.message : String(err));
+        })
+        .finally(() => {
+          changeNavBusyRef.current = false;
+        });
+    },
+    [
+      cursorLine,
+      displayLines,
+      filesInTreeOrder,
+      goToChangeLocation,
+      selectedFile?.path,
+      snapshot.mode,
+      snapshot.repoRoot,
+    ],
   );
 
   const findLineIndexForComment = useCallback(
@@ -672,6 +735,14 @@ export function App({
     if (!pending || loadingDiff) return;
     if (selectedFile?.path !== pending.filePath || displayLines.length === 0) return;
     pendingSearchMatchRef.current = null;
+    scrollToLine(pending.lineIndex);
+  }, [displayLines, loadingDiff, scrollToLine, selectedFile?.path]);
+
+  useEffect(() => {
+    const pending = pendingChangeJumpRef.current;
+    if (!pending || loadingDiff) return;
+    if (selectedFile?.path !== pending.filePath || displayLines.length === 0) return;
+    pendingChangeJumpRef.current = null;
     scrollToLine(pending.lineIndex);
   }, [displayLines, loadingDiff, scrollToLine, selectedFile?.path]);
 
@@ -1080,6 +1151,15 @@ export function App({
 
     if (key.tab) {
       setFocus((f) => (f === 'files' ? 'diff' : 'files'));
+      return;
+    }
+
+    if ((key.shift && key.downArrow) || input === 'j') {
+      jumpChangeBlock(1);
+      return;
+    }
+    if ((key.shift && key.upArrow) || input === 'k') {
+      jumpChangeBlock(-1);
       return;
     }
 

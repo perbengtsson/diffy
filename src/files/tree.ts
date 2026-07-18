@@ -129,6 +129,19 @@ export function flattenFileTree(
   return rows;
 }
 
+/** Files in the same top-to-bottom order as the file tree (dirs-first sort). */
+export function flattenFilesInTreeOrder(nodes: FileTreeNode[]): DiffFile[] {
+  const files: DiffFile[] = [];
+  for (const node of nodes) {
+    if (node.kind === 'dir') {
+      files.push(...flattenFilesInTreeOrder(node.children));
+    } else if (node.file) {
+      files.push(node.file);
+    }
+  }
+  return files;
+}
+
 export function findRowIndexForPath(rows: FileTreeRow[], path: string | undefined): number {
   if (!path) return 0;
   const idx = rows.findIndex((row) => row.node.kind === 'file' && row.node.path === path);

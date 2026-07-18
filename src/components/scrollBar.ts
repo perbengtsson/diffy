@@ -87,3 +87,15 @@ export function scrollOffsetFromTrackRow(
   const clampedRow = Math.max(0, Math.min(trackHeight - 1, row));
   return Math.round((clampedRow / (trackHeight - 1)) * maxScroll);
 }
+
+/** Scroll offset that places `lineIndex` as close to vertical center as possible. */
+export function centeredScrollOffset(
+  lineIndex: number,
+  viewportHeight: number,
+  totalLines: number,
+): number {
+  const maxScroll = Math.max(0, totalLines - viewportHeight);
+  if (maxScroll === 0 || viewportHeight <= 0) return 0;
+  const centered = lineIndex - Math.floor(viewportHeight / 2);
+  return Math.max(0, Math.min(maxScroll, centered));
+}

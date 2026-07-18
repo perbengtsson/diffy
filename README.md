@@ -44,6 +44,8 @@ Reviews are cached under `~/.config/diffy/review-<branch>-<YYYY-MM-DD-HHMM>.json
 | Double-click | Pin tab (file list or preview tab) |
 | `w` | Close active tab |
 | `g` / `G` | Jump to top/bottom of diff |
+| `Shift+↓` / `Shift+↑` | Jump to next/previous change block (across files) |
+| `j` / `k` | Same as Shift+↓ / Shift+↑ |
 | `c` | Comment / edit comment on current line (diff focus) |
 | `o` | Review overview (list comments; Enter jumps) |
 | `b` | Diff background palette (saved to `~/.config/diffy/config.json`) |
