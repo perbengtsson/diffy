@@ -57,7 +57,8 @@ export function getTheme(): Theme {
       hunkHeaderFg: 'cyan',
       selectedBg: 'gray',
       selectedFg: 'white',
-      borderFg: 'gray',
+      // Near-white chrome so frames stay behind tree │ guides (dimFg/gray).
+      borderFg: 'ansi256(253)',
       statusFg: 'black',
       dimFg: 'gray',
       defaultFg: 'black',
@@ -74,7 +75,8 @@ export function getTheme(): Theme {
     hunkHeaderFg: 'cyan',
     selectedBg: 'gray',
     selectedFg: 'whiteBright',
-    borderFg: 'gray',
+    // Near-white chrome so frames stay behind tree │ guides (dimFg/gray).
+    borderFg: 'ansi256(250)',
     statusFg: 'whiteBright',
     dimFg: 'gray',
     defaultFg: 'whiteBright',

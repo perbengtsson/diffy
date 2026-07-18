@@ -68,7 +68,7 @@ export function FileList({
         visible.map((row, i) => {
           const index = scrollOffset + i;
           const selected = index === selectedRowIndex;
-          const indent = '  '.repeat(row.depth);
+          const indent = '│ '.repeat(row.depth);
           const treePrefix =
             row.node.kind === 'dir'
               ? row.isExpanded
@@ -101,7 +101,11 @@ export function FileList({
                 color={color}
                 dimColor={!highlighted && !selected}
               >
-                {indent}
+                {indent.length > 0 && (
+                  <Text color={theme.dimFg} dimColor>
+                    {indent}
+                  </Text>
+                )}
                 {treePrefix}
                 {truncateName(label, labelWidth)}
                 {row.node.kind === 'file' && file && highlighted && (file.additions > 0 || file.deletions > 0) && (
