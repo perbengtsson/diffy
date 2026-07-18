@@ -148,6 +148,7 @@ export function App({
   const scrollbarDragRef = useRef(false);
   const doubleClickRef = useRef(EMPTY_DOUBLE_CLICK);
   const ensureFileVisibleRef = useRef<string | null>(null);
+  const syncFileRowToActiveRef = useRef(false);
   const tabViewsRef = useRef<Map<string, TabViewState>>(new Map());
   const prevActivePathRef = useRef<string | null>(null);
   const viewStateRef = useRef({ cursorLine, diffScroll });
@@ -277,11 +278,8 @@ export function App({
   }, [watch, snapshot.repoRoot, refresh]);
 
   useEffect(() => {
-    setFileRowIndex((i) => Math.min(i, Math.max(0, visibleFileRows.length - 1)));
-  }, [visibleFileRows]);
-
-  useEffect(() => {
     if (!fileTabs.activePath) return;
+    syncFileRowToActiveRef.current = true;
     setCollapsedDirs((prev) => {
       const next = expandDirsForPath(prev, fileTabs.activePath!);
       if (next.size === prev.size) {
@@ -299,9 +297,21 @@ export function App({
   }, [fileTabs.activePath]);
 
   useEffect(() => {
-    if (!fileTabs.activePath) return;
-    setFileRowIndex(findRowIndexForPath(visibleFileRows, fileTabs.activePath));
-  }, [fileTabs.activePath, visibleFileRows]);
+    if (syncFileRowToActiveRef.current && fileTabs.activePath) {
+      const idx = visibleFileRows.findIndex(
+        (row) =>
+          row.node.kind === 'file' && row.node.path === fileTabs.activePath,
+      );
+      if (idx >= 0) {
+        syncFileRowToActiveRef.current = false;
+        setFileRowIndex(idx);
+        return;
+      }
+    }
+    // Expand/collapse inserts/removes rows around the highlight — keep the
+    // same index when possible, only clamp if the list shrank.
+    setFileRowIndex((i) => Math.min(i, Math.max(0, visibleFileRows.length - 1)));
+  }, [visibleFileRows, fileTabs.activePath]);
 
   useEffect(() => {
     const prevPath = prevActivePathRef.current;
