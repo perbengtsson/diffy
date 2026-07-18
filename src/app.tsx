@@ -6,6 +6,7 @@ import { FileSummary, fileSummaryHeight } from './components/FileSummary.js';
 import { DiffView } from './components/DiffView.js';
 import { SearchBar } from './components/SearchBar.js';
 import { CommentBar } from './components/CommentBar.js';
+import { GoToLineBar } from './components/GoToLineBar.js';
 import { ReviewOverview } from './components/ReviewOverview.js';
 import { DiffBgPicker } from './components/DiffBgPicker.js';
 import { RepoBar } from './components/RepoBar.js';
@@ -34,6 +35,7 @@ import {
   type ChangeLocation,
 } from './diff/changeBlocks.js';
 import { buildDisplayLines } from './diff/expand.js';
+import { findDisplayLineIndexByNumber } from './diff/goToLine.js';
 import type { DisplayLine } from './diff/types.js';
 import {
   buildLineHighlightCache,
@@ -138,6 +140,8 @@ export function App({
   const [commentOpen, setCommentOpen] = useState(false);
   const [commentDraft, setCommentDraft] = useState('');
   const [commentEditing, setCommentEditing] = useState(false);
+  const [goToLineOpen, setGoToLineOpen] = useState(false);
+  const [goToLineDraft, setGoToLineDraft] = useState('');
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [overviewIndex, setOverviewIndex] = useState(0);
 
@@ -697,9 +701,44 @@ export function App({
     setCommentEditing(Boolean(existing));
     setCommentOpen(true);
     setSearchOpen(false);
+    setGoToLineOpen(false);
     setOverviewOpen(false);
     setError(null);
   }, [cursorLine, displayLines, selectedFile]);
+
+  const openGoToLine = useCallback(() => {
+    if (!selectedFile || displayLines.length === 0) {
+      setError('Select a file to go to a line');
+      return;
+    }
+    setGoToLineDraft('');
+    setGoToLineOpen(true);
+    setCommentOpen(false);
+    setSearchOpen(false);
+    setOverviewOpen(false);
+    setError(null);
+  }, [displayLines.length, selectedFile]);
+
+  const submitGoToLine = useCallback(() => {
+    const trimmed = goToLineDraft.trim();
+    setGoToLineOpen(false);
+    setGoToLineDraft('');
+    if (!trimmed) return;
+
+    const lineNo = Number.parseInt(trimmed, 10);
+    if (!Number.isFinite(lineNo) || lineNo < 1) {
+      setError('Enter a positive line number');
+      return;
+    }
+
+    const index = findDisplayLineIndexByNumber(displayLines, lineNo);
+    if (index < 0) {
+      setError(`Line ${lineNo} not visible in diff`);
+      return;
+    }
+    setError(null);
+    scrollToLine(index);
+  }, [displayLines, goToLineDraft, scrollToLine]);
 
   const saveCommentDraft = useCallback(() => {
     if (!selectedFile) {
@@ -963,6 +1002,8 @@ export function App({
     setSearchQuery('');
     setSearchMatchIndex(0);
     setAllSearchMatches([]);
+    setGoToLineOpen(false);
+    setCommentOpen(false);
     setFocus('diff');
   }, []);
 
@@ -1006,6 +1047,27 @@ export function App({
       }
       if (input.length === 1 && !key.ctrl && !key.meta && input >= ' ') {
         setCommentDraft((draft) => draft + input);
+        return;
+      }
+      return;
+    }
+
+    if (goToLineOpen) {
+      if (key.escape) {
+        setGoToLineOpen(false);
+        setGoToLineDraft('');
+        return;
+      }
+      if (key.return) {
+        submitGoToLine();
+        return;
+      }
+      if (key.backspace || key.delete) {
+        setGoToLineDraft((draft) => draft.slice(0, -1));
+        return;
+      }
+      if (input.length === 1 && input >= '0' && input <= '9') {
+        setGoToLineDraft((draft) => draft + input);
         return;
       }
       return;
@@ -1123,6 +1185,7 @@ export function App({
       setOverviewOpen(true);
       setOverviewIndex(0);
       setCommentOpen(false);
+      setGoToLineOpen(false);
       return;
     }
 
@@ -1135,6 +1198,7 @@ export function App({
       setBgPickerIndex(index);
       setBgPickerOpen(true);
       setCommentOpen(false);
+      setGoToLineOpen(false);
       setOverviewOpen(false);
       return;
     }
@@ -1227,6 +1291,11 @@ export function App({
       return;
     }
 
+    if (input === 'g') {
+      openGoToLine();
+      return;
+    }
+
     if (key.downArrow) {
       setCursorLine((c) => {
         const next = Math.min(displayLines.length - 1, c + 1);
@@ -1243,13 +1312,14 @@ export function App({
         }
         return next;
       });
-    } else if (input === 'g') {
-      setCursorLine(0);
-      setDiffScroll(0);
-    } else if (input === 'G') {
-      const last = Math.max(0, displayLines.length - 1);
-      setCursorLine(last);
-      setDiffScroll(Math.max(0, displayLines.length - diffHeight));
+    } else if (key.pageDown) {
+      const pageSize = Math.max(1, diffHeight);
+      setCursorLine((c) => Math.min(displayLines.length - 1, c + pageSize));
+      setDiffScroll((s) => Math.min(maxDiffScroll, s + pageSize));
+    } else if (key.pageUp) {
+      const pageSize = Math.max(1, diffHeight);
+      setCursorLine((c) => Math.max(0, c - pageSize));
+      setDiffScroll((s) => Math.max(0, s - pageSize));
     } else if (key.leftArrow) {
       if (fileTabs.tabs.length === 0) {
         setFocus('files');
@@ -1326,7 +1396,13 @@ export function App({
               cursorLine={cursorLine}
               height={diffHeight}
               width={diffPaneWidth}
-              focused={focus === 'diff' && !searchOpen && !commentOpen && !bgPickerOpen}
+              focused={
+                focus === 'diff' &&
+                !searchOpen &&
+                !commentOpen &&
+                !goToLineOpen &&
+                !bgPickerOpen
+              }
               theme={theme}
               highlightCache={highlightCache ?? undefined}
               searchQuery={searchOpen ? searchQuery : undefined}
@@ -1349,6 +1425,8 @@ export function App({
           theme={theme}
           width={columns}
         />
+      ) : goToLineOpen ? (
+        <GoToLineBar draft={goToLineDraft} theme={theme} width={columns} />
       ) : searchOpen ? (
         <SearchBar
           query={searchQuery}

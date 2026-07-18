@@ -26,7 +26,7 @@ export function StatusBar({
     ? '↑/↓:preview Enter:apply Esc:cancel'
     : focus === 'files'
       ? '↑/↓:nav ⇧↑/↓:change ←/→:fold u:all Tab:diff w:close ^F:find ^⇧F/⌥F:all o:review b:bg q:quit r:refresh'
-      : '↑/↓:scroll ⇧↑/↓:change ←/→:tabs c:comment o:review b:bg Tab:files w:close ^F:find g/G q:quit r:refresh'
+      : '↑/↓:scroll PgUp/PgDn:page ←/→:tabs c:comment g:line o:review b:bg Tab:files w:close ^F:find q:quit r:refresh'
 
   return (
     <Box width={width}>
