@@ -176,10 +176,9 @@ function renderGutter(
   theme: Theme,
   bold: boolean,
   highlight?: SearchHighlightStyle,
-  diffBg?: string,
   hasComment?: boolean,
 ) {
-  const backgroundColor = highlight?.bg ?? diffBg;
+  const backgroundColor = highlight?.bg;
   return (
     <>
       <Text
@@ -425,8 +424,6 @@ export function DiffView({
                   : undefined;
               const highlightStyle = searchStyle(searchHighlight);
               const bold = !isUneditedLine(line.kind);
-              const diffBg =
-                searchHighlight === undefined ? diffBackground(line, theme) : undefined;
               const commentKey = displayLineCommentKey(line);
               const hasComment =
                 commentKey !== null && (commentedKeys?.has(commentKey) ?? false);
@@ -445,7 +442,7 @@ export function DiffView({
                         : undefined
                     }
                   >
-                    {renderGutter(line, theme, bold, highlightStyle, diffBg, hasComment)}
+                    {renderGutter(line, theme, bold, highlightStyle, hasComment)}
                     {renderLineContent(
                       line,
                       theme,
