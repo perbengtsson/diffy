@@ -1,9 +1,14 @@
 #!/usr/bin/env node
 import { render } from 'ink';
 import { Command } from 'commander';
+import chalk from 'chalk';
 import { App, parseMode } from './app.js';
 import { loadDiffSnapshot } from './git/diff.js';
+import { currentBranchName } from './git/branch.js';
 import { findRepoRoot } from './git/runner.js';
+import { openOrCreateSession, todayDate } from './review/store.js';
+import { resumeCommand } from './review/compile.js';
+import { clipboardInstallHint, copyToClipboard } from './review/clipboard.js';
 
 async function main() {
   const program = new Command();
@@ -17,6 +22,10 @@ async function main() {
       'With --base, also include uncommitted working tree changes',
     )
     .option('--no-watch', 'Disable automatic refresh on file changes')
+    .option(
+      '--resume [name]',
+      'Resume a saved review (basename or path; omit for latest in this repo)',
+    )
     .parse(process.argv);
 
   const opts = program.opts<{
@@ -24,6 +33,7 @@ async function main() {
     base?: string;
     includeUncommitted?: boolean;
     noWatch?: boolean;
+    resume?: string | true;
   }>();
 
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
@@ -42,8 +52,9 @@ async function main() {
     includeUncommitted: opts.includeUncommitted,
   });
 
+  let repoRoot: string;
   try {
-    await findRepoRoot(process.cwd());
+    repoRoot = await findRepoRoot(process.cwd());
   } catch {
     console.error('Not a git repository (or git not found).');
     process.exit(1);
@@ -57,7 +68,49 @@ async function main() {
     process.exit(1);
   }
 
-  render(<App initialSnapshot={snapshot} cwd={process.cwd()} watch={!opts.noWatch} />);
+  const branch = await currentBranchName(repoRoot);
+  const date = todayDate();
+  const { session: initialReview, path: reviewPath } = await openOrCreateSession({
+    repoRoot,
+    branch,
+    date,
+    mode,
+    resume: opts.resume,
+  });
+
+  let quitTerminal = '';
+  let quitPlain = '';
+  const { waitUntilExit } = render(
+    <App
+      initialSnapshot={snapshot}
+      cwd={process.cwd()}
+      watch={!opts.noWatch}
+      initialReview={initialReview}
+      reviewPath={reviewPath}
+      onQuitReview={({ terminal, plain }) => {
+        quitTerminal = terminal;
+        quitPlain = plain;
+      }}
+    />,
+  );
+
+  await waitUntilExit();
+  if (quitTerminal) {
+    process.stdout.write(`\n${quitTerminal}`);
+    const copied = await copyToClipboard(quitPlain);
+    if (copied) {
+      process.stdout.write(chalk.dim('Copied review to clipboard.\n'));
+    } else {
+      process.stdout.write(
+        chalk.dim(
+          `Could not copy to clipboard.${clipboardInstallHint()}\n`,
+        ),
+      );
+    }
+    process.stdout.write(
+      `\nResume: ${chalk.bold.blue(resumeCommand(reviewPath))}\n`,
+    );
+  }
 }
 
 main().catch((err) => {

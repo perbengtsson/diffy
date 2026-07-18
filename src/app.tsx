@@ -4,11 +4,22 @@ import { FileList } from './components/FileList.js';
 import { FileSummary, fileSummaryHeight } from './components/FileSummary.js';
 import { DiffView } from './components/DiffView.js';
 import { SearchBar } from './components/SearchBar.js';
+import { CommentBar } from './components/CommentBar.js';
+import { ReviewOverview } from './components/ReviewOverview.js';
 import { StatusBar } from './components/StatusBar.js';
 import { TabBar, layoutTabBar, hitTestTab } from './components/TabBar.js';
 import { getTheme } from './theme.js';
 import type { DiffMode, DiffSnapshot } from './git/types.js';
 import { loadDiffSnapshot } from './git/diff.js';
+import { compileReview, formatReviewTerminal } from './review/compile.js';
+import {
+  commentedLineKeysForPath,
+  findComment,
+  persistSession,
+  resolveLineTarget,
+  upsertComment,
+} from './review/store.js';
+import type { ReviewComment, ReviewSession } from './review/types.js';
 import {
   buildDisplayLines,
   collapseHunk,
@@ -65,9 +76,19 @@ type Props = {
   initialSnapshot: DiffSnapshot;
   cwd: string;
   watch: boolean;
+  initialReview: ReviewSession;
+  reviewPath: string;
+  onQuitReview?: (payload: { terminal: string; plain: string }) => void;
 };
 
-export function App({ initialSnapshot, cwd, watch }: Props) {
+export function App({
+  initialSnapshot,
+  cwd,
+  watch,
+  initialReview,
+  reviewPath,
+  onQuitReview,
+}: Props) {
   const { exit } = useApp();
   const { columns, rows } = useTerminalSize();
   const theme = useMemo(() => getTheme(), []);
@@ -94,8 +115,23 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
   const [searchMatchIndex, setSearchMatchIndex] = useState(0);
   const [allSearchMatches, setAllSearchMatches] = useState<SearchMatch[]>([]);
   const [allSearchLoading, setAllSearchLoading] = useState(false);
+  const [reviewSession, setReviewSession] = useState(initialReview);
+  const [commentOpen, setCommentOpen] = useState(false);
+  const [commentDraft, setCommentDraft] = useState('');
+  const [commentEditing, setCommentEditing] = useState(false);
+  const [overviewOpen, setOverviewOpen] = useState(false);
+  const [overviewIndex, setOverviewIndex] = useState(0);
 
   const pendingSearchMatchRef = useRef<SearchMatch | null>(null);
+  const pendingReviewJumpRef = useRef<ReviewComment | null>(null);
+  const reviewSessionRef = useRef(reviewSession);
+  reviewSessionRef.current = reviewSession;
+  const reviewPathRef = useRef(reviewPath);
+  reviewPathRef.current = reviewPath;
+  const onQuitReviewRef = useRef(onQuitReview);
+  onQuitReviewRef.current = onQuitReview;
+  const skipInitialReviewSaveRef = useRef(true);
+
   const scrollbarDragRef = useRef(false);
   const doubleClickRef = useRef(EMPTY_DOUBLE_CLICK);
   const ensureFileVisibleRef = useRef<string | null>(null);
@@ -156,6 +192,44 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
   const selectedFile = fileTabs.activePath
     ? snapshot.files.find((f) => f.path === fileTabs.activePath)
     : undefined;
+
+  const sortedReviewComments = useMemo(() => {
+    return [...reviewSession.comments].sort((a, b) => {
+      const pathCmp = a.path.localeCompare(b.path);
+      if (pathCmp !== 0) return pathCmp;
+      if (a.line !== b.line) return a.line - b.line;
+      return a.side.localeCompare(b.side);
+    });
+  }, [reviewSession.comments]);
+
+  const commentedKeys = useMemo(
+    () =>
+      selectedFile
+        ? commentedLineKeysForPath(reviewSession, selectedFile.path)
+        : new Set<string>(),
+    [reviewSession, selectedFile],
+  );
+
+  useEffect(() => {
+    setOverviewIndex((i) =>
+      Math.min(i, Math.max(0, sortedReviewComments.length - 1)),
+    );
+  }, [sortedReviewComments.length]);
+
+  useEffect(() => {
+    if (skipInitialReviewSaveRef.current) {
+      skipInitialReviewSaveRef.current = false;
+      return;
+    }
+    const handle = setTimeout(() => {
+      void persistSession(reviewPathRef.current, reviewSessionRef.current).catch(
+        (err) => {
+          setError(err instanceof Error ? err.message : String(err));
+        },
+      );
+    }, 100);
+    return () => clearTimeout(handle);
+  }, [reviewSession]);
 
   const refresh = useCallback(async () => {
     if (refreshingRef.current) return;
@@ -432,6 +506,146 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
     [fileTabs.pin, scrollToLine, selectedFile?.path, snapshot.files],
   );
 
+  const findLineIndexForComment = useCallback(
+    (comment: ReviewComment, lines: DisplayLine[]): number => {
+      for (let i = 0; i < lines.length; i++) {
+        const target = resolveLineTarget(lines[i]!);
+        if (
+          target &&
+          target.side === comment.side &&
+          target.line === comment.line
+        ) {
+          return i;
+        }
+      }
+      return -1;
+    },
+    [],
+  );
+
+  const goToReviewComment = useCallback(
+    (comment: ReviewComment | undefined) => {
+      if (!comment) return;
+      setOverviewOpen(false);
+
+      if (comment.path !== selectedFile?.path) {
+        pendingReviewJumpRef.current = comment;
+        if (!snapshot.files.some((file) => file.path === comment.path)) {
+          setError(`File not in current diff: ${comment.path}`);
+          return;
+        }
+        setCollapsedDirs((prev) => expandDirsForPath(prev, comment.path));
+        fileTabs.pin(comment.path);
+        setFocus('diff');
+        return;
+      }
+
+      const index = findLineIndexForComment(comment, displayLines);
+      if (index < 0) {
+        setError(`Line L${comment.line} (${comment.side}) not visible in diff`);
+        return;
+      }
+      scrollToLine(index);
+    },
+    [
+      displayLines,
+      fileTabs.pin,
+      findLineIndexForComment,
+      scrollToLine,
+      selectedFile?.path,
+      snapshot.files,
+    ],
+  );
+
+  useEffect(() => {
+    const pending = pendingReviewJumpRef.current;
+    if (!pending || loadingDiff) return;
+    if (selectedFile?.path !== pending.path || displayLines.length === 0) return;
+    pendingReviewJumpRef.current = null;
+    const index = findLineIndexForComment(pending, displayLines);
+    if (index < 0) {
+      setError(`Line L${pending.line} (${pending.side}) not visible in diff`);
+      return;
+    }
+    scrollToLine(index);
+  }, [
+    displayLines,
+    findLineIndexForComment,
+    loadingDiff,
+    scrollToLine,
+    selectedFile?.path,
+  ]);
+
+  const quitApp = useCallback(() => {
+    const session = reviewSessionRef.current;
+    void persistSession(reviewPathRef.current, session)
+      .catch(() => {
+        /* best-effort; still quit */
+      })
+      .finally(() => {
+        onQuitReviewRef.current?.({
+          terminal: formatReviewTerminal(session),
+          plain: compileReview(session),
+        });
+        exit();
+      });
+  }, [exit]);
+
+  const openCommentEditor = useCallback(() => {
+    if (!selectedFile) {
+      setError('Select a file to comment');
+      return;
+    }
+    const line = displayLines[cursorLine];
+    if (!line) return;
+    const target = resolveLineTarget(line);
+    if (!target) {
+      setError('Cannot comment on this line');
+      return;
+    }
+    const existing = findComment(
+      reviewSessionRef.current,
+      selectedFile.path,
+      target.side,
+      target.line,
+    );
+    setCommentDraft(existing?.body ?? '');
+    setCommentEditing(Boolean(existing));
+    setCommentOpen(true);
+    setSearchOpen(false);
+    setOverviewOpen(false);
+    setError(null);
+  }, [cursorLine, displayLines, selectedFile]);
+
+  const saveCommentDraft = useCallback(() => {
+    if (!selectedFile) {
+      setCommentOpen(false);
+      return;
+    }
+    const line = displayLines[cursorLine];
+    if (!line) {
+      setCommentOpen(false);
+      return;
+    }
+    const target = resolveLineTarget(line);
+    if (!target) {
+      setCommentOpen(false);
+      return;
+    }
+    setReviewSession((session) =>
+      upsertComment(session, {
+        path: selectedFile.path,
+        side: target.side,
+        line: target.line,
+        body: commentDraft,
+        snippet: target.snippet,
+        otherLine: target.otherLine,
+      }),
+    );
+    setCommentOpen(false);
+    setCommentDraft('');
+  }, [commentDraft, cursorLine, displayLines, selectedFile]);
+
   useEffect(() => {
     const pending = pendingSearchMatchRef.current;
     if (!pending || loadingDiff) return;
@@ -678,6 +892,55 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
 
     const isFindKey = input === 'f' || input === 'F';
 
+    if (commentOpen) {
+      if (key.escape) {
+        setCommentOpen(false);
+        setCommentDraft('');
+        return;
+      }
+      if (key.return) {
+        saveCommentDraft();
+        return;
+      }
+      if (key.backspace || key.delete) {
+        setCommentDraft((draft) => draft.slice(0, -1));
+        return;
+      }
+      if (input.length === 1 && !key.ctrl && !key.meta && input >= ' ') {
+        setCommentDraft((draft) => draft + input);
+        return;
+      }
+      return;
+    }
+
+    if (overviewOpen) {
+      if (key.escape || input === 'o') {
+        setOverviewOpen(false);
+        return;
+      }
+      if (input === 'q' || (key.ctrl && input === 'c')) {
+        quitApp();
+        return;
+      }
+      if (input === 'j' || key.downArrow) {
+        if (sortedReviewComments.length === 0) return;
+        setOverviewIndex((i) =>
+          Math.min(sortedReviewComments.length - 1, i + 1),
+        );
+        return;
+      }
+      if (input === 'k' || key.upArrow) {
+        if (sortedReviewComments.length === 0) return;
+        setOverviewIndex((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (key.return) {
+        goToReviewComment(sortedReviewComments[overviewIndex]);
+        return;
+      }
+      return;
+    }
+
     if (key.meta && isFindKey) {
       openSearch('all');
       return;
@@ -726,7 +989,14 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
     }
 
     if (input === 'q' || (key.ctrl && input === 'c')) {
-      exit();
+      quitApp();
+      return;
+    }
+
+    if (input === 'o') {
+      setOverviewOpen(true);
+      setOverviewIndex(0);
+      setCommentOpen(false);
       return;
     }
 
@@ -805,6 +1075,11 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
     }
 
     // diff focus
+    if (input === 'c') {
+      openCommentEditor();
+      return;
+    }
+
     if (input === 'j' || key.downArrow) {
       setCursorLine((c) => {
         const next = Math.min(displayLines.length - 1, c + 1);
@@ -862,53 +1137,73 @@ export function App({ initialSnapshot, cwd, watch }: Props) {
 
   return (
     <Box flexDirection="column" width={columns} height={rows}>
-      <Box flexDirection="row" height={contentHeight}>
-        <Box flexDirection="column" width={filePaneWidth} height={contentHeight}>
-          <FileList
-            rows={visibleFileRows}
-            selectedRowIndex={fileRowIndex}
-            scrollOffset={fileScroll}
-            height={fileListHeight}
-            width={filePaneWidth}
-            theme={theme}
-            dirsWithChanges={dirsWithChanges}
-          />
-          <FileSummary
-            summary={changeSummary}
-            width={filePaneWidth}
-            theme={theme}
-            maxTypeRows={summaryTypeRows}
-          />
+      {overviewOpen ? (
+        <ReviewOverview
+          comments={sortedReviewComments}
+          selectedIndex={overviewIndex}
+          height={contentHeight}
+          width={columns}
+          theme={theme}
+          branch={reviewSession.branch}
+          date={reviewSession.date}
+        />
+      ) : (
+        <Box flexDirection="row" height={contentHeight}>
+          <Box flexDirection="column" width={filePaneWidth} height={contentHeight}>
+            <FileList
+              rows={visibleFileRows}
+              selectedRowIndex={fileRowIndex}
+              scrollOffset={fileScroll}
+              height={fileListHeight}
+              width={filePaneWidth}
+              theme={theme}
+              dirsWithChanges={dirsWithChanges}
+            />
+            <FileSummary
+              summary={changeSummary}
+              width={filePaneWidth}
+              theme={theme}
+              maxTypeRows={summaryTypeRows}
+            />
+          </Box>
+          <Box flexDirection="column" width={diffPaneWidth} height={contentHeight}>
+            <TabBar
+              tabs={fileTabs.tabs}
+              activePath={fileTabs.activePath}
+              contentFocused={focus === 'diff'}
+              width={diffPaneWidth}
+              theme={theme}
+            />
+            <DiffView
+              lines={loadingDiff ? [{ kind: 'binary', content: 'Loading…' }] : displayLines}
+              scrollOffset={diffScroll}
+              cursorLine={cursorLine}
+              height={diffHeight}
+              width={diffPaneWidth}
+              focused={focus === 'diff' && !searchOpen && !commentOpen}
+              theme={theme}
+              highlightCache={highlightCache ?? undefined}
+              searchQuery={searchOpen ? searchQuery : undefined}
+              searchMatchLines={currentFileSearchLines}
+              activeSearchLine={activeSearchLine}
+              commentedKeys={commentedKeys}
+              emptyMessage={
+                selectedFile && !isEditedFile(selectedFile)
+                  ? 'No changes'
+                  : 'Select a file to view its diff'
+              }
+            />
+          </Box>
         </Box>
-        <Box flexDirection="column" width={diffPaneWidth} height={contentHeight}>
-          <TabBar
-            tabs={fileTabs.tabs}
-            activePath={fileTabs.activePath}
-            contentFocused={focus === 'diff'}
-            width={diffPaneWidth}
-            theme={theme}
-          />
-          <DiffView
-            lines={loadingDiff ? [{ kind: 'binary', content: 'Loading…' }] : displayLines}
-            scrollOffset={diffScroll}
-            cursorLine={cursorLine}
-            height={diffHeight}
-            width={diffPaneWidth}
-            focused={focus === 'diff' && !searchOpen}
-            theme={theme}
-            highlightCache={highlightCache ?? undefined}
-            searchQuery={searchOpen ? searchQuery : undefined}
-            searchMatchLines={currentFileSearchLines}
-            activeSearchLine={activeSearchLine}
-            emptyMessage={
-              selectedFile && !isEditedFile(selectedFile)
-                ? 'No changes'
-                : 'Select a file to view its diff'
-            }
-          />
-        </Box>
-      </Box>
-      {searchOpen ? (
+      )}
+      {commentOpen ? (
+        <CommentBar
+          draft={commentDraft}
+          editing={commentEditing}
+          theme={theme}
+          width={columns}
+        />
+      ) : searchOpen ? (
         <SearchBar
           query={searchQuery}
           scope={searchScope}

@@ -25,8 +25,8 @@ export function StatusBar({
   const focusLabel = focus === 'files' ? 'files' : 'diff';
   const keys =
     focus === 'files'
-      ? 'j/k:nav h/l:fold u:all Tab:diff w:close ^F:find ^⇧F/⌥F:all q:quit r:refresh'
-      : 'j/k:scroll ←/→:tabs {/}:expand Tab:files w:close ^F:find ^⇧F/⌥F:all g/G:top/bot q:quit r:refresh';
+      ? 'j/k:nav h/l:fold u:all Tab:diff w:close ^F:find ^⇧F/⌥F:all o:review q:quit r:refresh'
+      : 'j/k:scroll ←/→:tabs {/}:expand c:comment o:review Tab:files w:close ^F:find g/G q:quit r:refresh'
 
   const truncatedPath =
     filePath.length > Math.max(20, width - 60)

@@ -8,6 +8,7 @@ import type { DisplayLine, DisplayLineKind } from '../diff/types.js';
 import type { Theme } from '../theme.js';
 import { SCROLLBAR_WIDTH, needsScrollBar } from './scrollBar.js';
 import { DiffScrollBar } from './DiffScrollBar.js';
+import { displayLineCommentKey } from '../review/store.js';
 
 type Props = {
   lines: DisplayLine[];
@@ -21,6 +22,8 @@ type Props = {
   searchQuery?: string;
   searchMatchLines?: ReadonlySet<number>;
   activeSearchLine?: number;
+  /** Keys as `side:line` (e.g. `new:42`) for gutter comment markers. */
+  commentedKeys?: ReadonlySet<string>;
   emptyMessage?: string;
 };
 
@@ -174,6 +177,7 @@ function renderGutter(
   bold: boolean,
   highlight?: SearchHighlightStyle,
   diffBg?: string,
+  hasComment?: boolean,
 ) {
   const backgroundColor = highlight?.bg ?? diffBg;
   return (
@@ -192,7 +196,13 @@ function renderGutter(
       >
         {formatLineNo(line.newLineNo, 4)}
       </Text>
-      <Text backgroundColor={backgroundColor}> </Text>
+      <Text
+        backgroundColor={backgroundColor}
+        color={hasComment ? theme.hunkHeaderFg : undefined}
+        dimColor={!hasComment}
+      >
+        {hasComment ? '●' : ' '}
+      </Text>
     </>
   );
 }
@@ -398,6 +408,7 @@ export function DiffView({
   searchQuery,
   searchMatchLines,
   activeSearchLine,
+  commentedKeys,
   emptyMessage = 'Select a file to view its diff',
 }: Props) {
   const innerHeight = Math.max(1, height);
@@ -431,6 +442,9 @@ export function DiffView({
               const bold = !isUneditedLine(line.kind);
               const diffBg =
                 searchHighlight === undefined ? diffBackground(line, theme) : undefined;
+              const commentKey = displayLineCommentKey(line);
+              const hasComment =
+                commentKey !== null && (commentedKeys?.has(commentKey) ?? false);
               return (
                 <Box key={absoluteIndex}>
                   <Text
@@ -446,7 +460,7 @@ export function DiffView({
                         : undefined
                     }
                   >
-                    {renderGutter(line, theme, bold, highlightStyle, diffBg)}
+                    {renderGutter(line, theme, bold, highlightStyle, diffBg, hasComment)}
                     {renderLineContent(
                       line,
                       theme,
