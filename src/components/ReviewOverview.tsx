@@ -22,7 +22,7 @@ export function ReviewOverview({
   date,
 }: Props) {
   const header = `Review overview — ${branch} — ${date} (${comments.length})`;
-  const hints = 'j/k:nav Enter:jump o/Esc:close';
+  const hints = '↑/↓:nav Enter:jump o/Esc:close';
   const listHeight = Math.max(1, height - 2);
 
   const start = Math.max(

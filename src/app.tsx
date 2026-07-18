@@ -906,14 +906,14 @@ export function App({
         quitApp();
         return;
       }
-      if (input === 'j' || key.downArrow) {
+      if (key.downArrow) {
         if (sortedReviewComments.length === 0) return;
         setOverviewIndex((i) =>
           Math.min(sortedReviewComments.length - 1, i + 1),
         );
         return;
       }
-      if (input === 'k' || key.upArrow) {
+      if (key.upArrow) {
         if (sortedReviewComments.length === 0) return;
         setOverviewIndex((i) => Math.max(0, i - 1));
         return;
@@ -1011,14 +1011,14 @@ export function App({
         selectFileRow(nextRow, openDiff);
       };
 
-      if (input === 'j' || key.downArrow) {
+      if (key.downArrow) {
         if (visibleFileRows.length === 0) return;
         const next = Math.min(visibleFileRows.length - 1, fileRowIndex + 1);
         selectRow(next);
         if (next >= fileScroll + fileListHeight) {
           setFileScroll((s) => Math.min(maxFileScroll, s + 1));
         }
-      } else if (input === 'k' || key.upArrow) {
+      } else if (key.upArrow) {
         if (visibleFileRows.length === 0) return;
         const next = Math.max(0, fileRowIndex - 1);
         selectRow(next);
@@ -1026,13 +1026,13 @@ export function App({
           setFileScroll((s) => Math.max(0, s - 1));
         }
       } else if (
-        (input === 'h' || key.leftArrow) &&
+        key.leftArrow &&
         currentRow?.node.kind === 'dir' &&
         !collapsedDirs.has(currentRow.node.path)
       ) {
         setCollapsedDirs((prev) => new Set(prev).add(currentRow.node.path));
       } else if (
-        (input === 'l' || key.rightArrow) &&
+        key.rightArrow &&
         currentRow?.node.kind === 'dir' &&
         collapsedDirs.has(currentRow.node.path)
       ) {
@@ -1049,7 +1049,6 @@ export function App({
       } else if (key.return && currentRow?.node.kind === 'file') {
         fileTabs.pin(currentRow.node.path);
       } else if (
-        input === 'l' ||
         key.rightArrow ||
         (currentRow?.node.kind === 'file' && input === ' ')
       ) {
@@ -1064,7 +1063,7 @@ export function App({
       return;
     }
 
-    if (input === 'j' || key.downArrow) {
+    if (key.downArrow) {
       setCursorLine((c) => {
         const next = Math.min(displayLines.length - 1, c + 1);
         if (next >= diffScroll + diffHeight) {
@@ -1072,7 +1071,7 @@ export function App({
         }
         return next;
       });
-    } else if (input === 'k' || key.upArrow) {
+    } else if (key.upArrow) {
       setCursorLine((c) => {
         const next = Math.max(0, c - 1);
         if (next < diffScroll) {
@@ -1100,8 +1099,6 @@ export function App({
       fileTabs.activateRelative(-1);
     } else if (key.rightArrow) {
       fileTabs.activateRelative(1);
-    } else if (input === 'h') {
-      setFocus('files');
     } else if (key.return && fileTabs.activePath) {
       fileTabs.pin(fileTabs.activePath);
     }

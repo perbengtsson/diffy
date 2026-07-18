@@ -37,10 +37,10 @@ Reviews are cached under `~/.config/diffy/review-<branch>-<YYYY-MM-DD-HHMM>.json
 | Key | Action |
 |-----|--------|
 | `Tab` | Switch focus between file list and diff |
-| `j`/`k`, arrows | Navigate files (preview tab) or scroll diff |
-| `←` / `→` | Switch tabs (diff focus; `←` on first tab returns to files) |
+| `↑` / `↓` | Navigate files (preview tab) or scroll diff |
+| `←` / `→` | Fold dirs (files) or switch tabs (diff; `←` on first tab returns to files) |
 | `Enter` | Pin tab |
-| `Space` / `l` | Open / focus diff |
+| `Space` / `→` | Open / focus diff |
 | Double-click | Pin tab (file list or preview tab) |
 | `w` | Close active tab |
 | `g` / `G` | Jump to top/bottom of diff |
