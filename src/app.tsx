@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { basename } from 'node:path';
 import { Box, useApp, useInput } from 'ink';
 import { FileList } from './components/FileList.js';
 import { FileSummary, fileSummaryHeight } from './components/FileSummary.js';
@@ -6,6 +7,7 @@ import { DiffView } from './components/DiffView.js';
 import { SearchBar } from './components/SearchBar.js';
 import { CommentBar } from './components/CommentBar.js';
 import { ReviewOverview } from './components/ReviewOverview.js';
+import { RepoBar } from './components/RepoBar.js';
 import { StatusBar } from './components/StatusBar.js';
 import { TabBar, layoutTabBar, hitTestTab } from './components/TabBar.js';
 import { getTheme } from './theme.js';
@@ -147,7 +149,9 @@ export function App({
   const diffPaneWidth = Math.max(30, columns - filePaneWidth - 1);
   const contentHeight = Math.max(5, rows - 2);
   const tabBarHeight = 1;
+  const fileHeaderHeight = 1;
   const diffHeight = Math.max(1, contentHeight - tabBarHeight);
+  const repoName = basename(snapshot.repoRoot);
   const scrollBarLayout = useMemo(
     () => ({
       columns,
@@ -180,7 +184,10 @@ export function App({
   );
   const summaryTypeRows = 5;
   const summaryHeight = fileSummaryHeight(changeSummary, summaryTypeRows);
-  const fileListHeight = Math.max(1, contentHeight - summaryHeight);
+  const fileListHeight = Math.max(
+    1,
+    contentHeight - summaryHeight - fileHeaderHeight,
+  );
 
   const selectedFile = fileTabs.activePath
     ? snapshot.files.find((f) => f.path === fileTabs.activePath)
@@ -683,8 +690,8 @@ export function App({
         if (
           event.x >= 1 &&
           event.x <= filePaneWidth &&
-          event.y >= 1 &&
-          event.y <= fileListHeight
+          event.y >= 1 + fileHeaderHeight &&
+          event.y <= fileHeaderHeight + fileListHeight
         ) {
           setFocus('files');
           setFileScroll((s) => Math.max(0, Math.min(maxFileScroll, s + delta)));
@@ -790,11 +797,16 @@ export function App({
         return;
       }
 
-      if (event.x < 1 || event.x > filePaneWidth || event.y < 1 || event.y > contentHeight) {
+      if (
+        event.x < 1 ||
+        event.x > filePaneWidth ||
+        event.y < 1 + fileHeaderHeight ||
+        event.y > fileHeaderHeight + fileListHeight
+      ) {
         return;
       }
 
-      const rowIndex = event.y - 1 + fileScroll;
+      const rowIndex = event.y - 1 - fileHeaderHeight + fileScroll;
       if (rowIndex < 0 || rowIndex >= visibleFileRows.length) return;
 
       const row = visibleFileRows[rowIndex];
@@ -825,6 +837,7 @@ export function App({
       diffPaneWidth,
       diffScroll,
       displayLines.length,
+      fileHeaderHeight,
       fileListHeight,
       filePaneWidth,
       fileScroll,
@@ -1119,6 +1132,7 @@ export function App({
       ) : (
         <Box flexDirection="row" height={contentHeight}>
           <Box flexDirection="column" width={filePaneWidth} height={contentHeight}>
+            <RepoBar name={repoName} width={filePaneWidth} theme={theme} />
             <FileList
               rows={visibleFileRows}
               selectedRowIndex={fileRowIndex}
