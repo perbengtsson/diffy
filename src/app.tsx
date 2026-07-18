@@ -1186,7 +1186,6 @@ export function App({
         <StatusBar
           modeLabel={snapshot.modeLabel}
           focus={focus}
-          filePath={selectedFile?.path ?? ''}
           error={error}
           theme={theme}
           width={columns}
