@@ -7,10 +7,16 @@ import { DiffView } from './components/DiffView.js';
 import { SearchBar } from './components/SearchBar.js';
 import { CommentBar } from './components/CommentBar.js';
 import { ReviewOverview } from './components/ReviewOverview.js';
+import { DiffBgPicker } from './components/DiffBgPicker.js';
 import { RepoBar } from './components/RepoBar.js';
 import { StatusBar } from './components/StatusBar.js';
 import { TabBar, layoutTabBar, hitTestTab } from './components/TabBar.js';
-import { getTheme } from './theme.js';
+import {
+  DEFAULT_DIFF_BG_PALETTE_ID,
+  DIFF_BG_PALETTES,
+  getTheme,
+} from './theme.js';
+import { saveUserConfig } from './config/userConfig.js';
 import type { DiffMode, DiffSnapshot } from './git/types.js';
 import { loadDiffSnapshot } from './git/diff.js';
 import { compileReview, formatReviewTerminal } from './review/compile.js';
@@ -74,6 +80,7 @@ type Props = {
   watch: boolean;
   initialReview: ReviewSession;
   reviewPath: string;
+  initialDiffBgPaletteId?: string;
   onQuitReview?: (payload: { terminal: string; plain: string }) => void;
 };
 
@@ -83,11 +90,22 @@ export function App({
   watch,
   initialReview,
   reviewPath,
+  initialDiffBgPaletteId = DEFAULT_DIFF_BG_PALETTE_ID,
   onQuitReview,
 }: Props) {
   const { exit } = useApp();
   const { columns, rows } = useTerminalSize();
-  const theme = useMemo(() => getTheme(), []);
+  const [diffBgPaletteId, setDiffBgPaletteId] = useState(initialDiffBgPaletteId);
+  const [bgPickerOpen, setBgPickerOpen] = useState(false);
+  const [bgPickerIndex, setBgPickerIndex] = useState(0);
+  const [bgPickerSavedId, setBgPickerSavedId] = useState(initialDiffBgPaletteId);
+  const theme = useMemo(() => {
+    if (bgPickerOpen) {
+      const previewId = DIFF_BG_PALETTES[bgPickerIndex]?.id ?? diffBgPaletteId;
+      return getTheme(previewId);
+    }
+    return getTheme(diffBgPaletteId);
+  }, [bgPickerIndex, bgPickerOpen, diffBgPaletteId]);
 
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [fileRowIndex, setFileRowIndex] = useState(0);
@@ -145,7 +163,9 @@ export function App({
   const modeRef = useRef(initialSnapshot.mode);
   modeRef.current = snapshot.mode;
 
-  const filePaneWidth = Math.max(25, Math.min(37, Math.floor(columns * 0.28) + 5));
+  const filePaneWidth = bgPickerOpen
+    ? Math.max(40, Math.min(56, Math.floor(columns * 0.42)))
+    : Math.max(25, Math.min(37, Math.floor(columns * 0.28) + 5));
   const diffPaneWidth = Math.max(30, columns - filePaneWidth - 1);
   const contentHeight = Math.max(5, rows - 2);
   const tabBarHeight = 1;
@@ -938,6 +958,34 @@ export function App({
       return;
     }
 
+    if (bgPickerOpen) {
+      if (key.escape) {
+        setDiffBgPaletteId(bgPickerSavedId);
+        setBgPickerOpen(false);
+        return;
+      }
+      if (key.return) {
+        const chosen = DIFF_BG_PALETTES[bgPickerIndex];
+        if (chosen) {
+          setDiffBgPaletteId(chosen.id);
+          void saveUserConfig({ diffBgPaletteId: chosen.id }).catch((err) => {
+            setError(err instanceof Error ? err.message : String(err));
+          });
+        }
+        setBgPickerOpen(false);
+        return;
+      }
+      if (key.downArrow) {
+        setBgPickerIndex((i) => Math.min(DIFF_BG_PALETTES.length - 1, i + 1));
+        return;
+      }
+      if (key.upArrow) {
+        setBgPickerIndex((i) => Math.max(0, i - 1));
+        return;
+      }
+      return;
+    }
+
     if (key.meta && isFindKey) {
       openSearch('all');
       return;
@@ -994,6 +1042,19 @@ export function App({
       setOverviewOpen(true);
       setOverviewIndex(0);
       setCommentOpen(false);
+      return;
+    }
+
+    if (input === 'b') {
+      const index = Math.max(
+        0,
+        DIFF_BG_PALETTES.findIndex((p) => p.id === diffBgPaletteId),
+      );
+      setBgPickerSavedId(diffBgPaletteId);
+      setBgPickerIndex(index);
+      setBgPickerOpen(true);
+      setCommentOpen(false);
+      setOverviewOpen(false);
       return;
     }
 
@@ -1132,22 +1193,34 @@ export function App({
       ) : (
         <Box flexDirection="row" height={contentHeight}>
           <Box flexDirection="column" width={filePaneWidth} height={contentHeight}>
-            <RepoBar name={repoName} width={filePaneWidth} theme={theme} />
-            <FileList
-              rows={visibleFileRows}
-              selectedRowIndex={fileRowIndex}
-              scrollOffset={fileScroll}
-              height={fileListHeight}
-              width={filePaneWidth}
-              theme={theme}
-              dirsWithChanges={dirsWithChanges}
-            />
-            <FileSummary
-              summary={changeSummary}
-              width={filePaneWidth}
-              theme={theme}
-              maxTypeRows={summaryTypeRows}
-            />
+            {bgPickerOpen ? (
+              <DiffBgPicker
+                selectedIndex={bgPickerIndex}
+                height={contentHeight}
+                width={filePaneWidth}
+                theme={theme}
+                activePaletteId={bgPickerSavedId}
+              />
+            ) : (
+              <>
+                <RepoBar name={repoName} width={filePaneWidth} theme={theme} />
+                <FileList
+                  rows={visibleFileRows}
+                  selectedRowIndex={fileRowIndex}
+                  scrollOffset={fileScroll}
+                  height={fileListHeight}
+                  width={filePaneWidth}
+                  theme={theme}
+                  dirsWithChanges={dirsWithChanges}
+                />
+                <FileSummary
+                  summary={changeSummary}
+                  width={filePaneWidth}
+                  theme={theme}
+                  maxTypeRows={summaryTypeRows}
+                />
+              </>
+            )}
           </Box>
           <Box flexDirection="column" width={diffPaneWidth} height={contentHeight}>
             <TabBar
@@ -1163,7 +1236,7 @@ export function App({
               cursorLine={cursorLine}
               height={diffHeight}
               width={diffPaneWidth}
-              focused={focus === 'diff' && !searchOpen && !commentOpen}
+              focused={focus === 'diff' && !searchOpen && !commentOpen && !bgPickerOpen}
               theme={theme}
               highlightCache={highlightCache ?? undefined}
               searchQuery={searchOpen ? searchQuery : undefined}
@@ -1205,6 +1278,7 @@ export function App({
           width={columns}
           watching={watch}
           refreshing={refreshing}
+          bgPickerOpen={bgPickerOpen}
         />
       )}
     </Box>

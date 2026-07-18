@@ -7,6 +7,7 @@ import { loadDiffSnapshot } from './git/diff.js';
 import { currentBranchName } from './git/branch.js';
 import { findRepoRoot } from './git/runner.js';
 import { openOrCreateSession, todayDate } from './review/store.js';
+import { loadUserConfig } from './config/userConfig.js';
 import { resumeCommand } from './review/compile.js';
 import { clipboardInstallHint, copyToClipboard } from './review/clipboard.js';
 
@@ -70,13 +71,17 @@ async function main() {
 
   const branch = await currentBranchName(repoRoot);
   const date = todayDate();
-  const { session: initialReview, path: reviewPath } = await openOrCreateSession({
-    repoRoot,
-    branch,
-    date,
-    mode,
-    resume: opts.resume,
-  });
+  const [{ session: initialReview, path: reviewPath }, userConfig] =
+    await Promise.all([
+      openOrCreateSession({
+        repoRoot,
+        branch,
+        date,
+        mode,
+        resume: opts.resume,
+      }),
+      loadUserConfig(),
+    ]);
 
   let quitTerminal = '';
   let quitPlain = '';
@@ -87,6 +92,7 @@ async function main() {
       watch={!opts.noWatch}
       initialReview={initialReview}
       reviewPath={reviewPath}
+      initialDiffBgPaletteId={userConfig.diffBgPaletteId}
       onQuitReview={({ terminal, plain }) => {
         quitTerminal = terminal;
         quitPlain = plain;
