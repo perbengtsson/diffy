@@ -6,11 +6,11 @@ Operate as an autonomous senior engineer: grasp intent, research with tools, imp
 
 ## Project
 
-`diffy` is a terminal git diff reviewer (Ink + React + TypeScript CLI, single package, not a monorepo). It shows a file list, colorized unified diffs, and per-hunk context expansion.
+`diffy` is a terminal git diff reviewer (Ink + React + TypeScript CLI, single package, not a monorepo). It shows a file list and colorized unified diffs.
 
 See `README.md` for install/usage and keybindings. Check the README before inventing an approach.
 
-**Layout:** `src/index.tsx` (CLI entry / commander), `src/app.tsx` (Ink app shell), `src/git/` (diff loading via git), `src/components/` (FileList, DiffView, TabBar, StatusBar, …), `src/diff/` (hunk expand/collapse), `src/watch/` (repo auto-refresh), `src/highlight/` (syntax highlighting). Keep git I/O in `src/git/`; don't shell out to git from UI components.
+**Layout:** `src/index.tsx` (CLI entry / commander), `src/app.tsx` (Ink app shell), `src/git/` (diff loading via git), `src/components/` (FileList, DiffView, TabBar, StatusBar, …), `src/diff/` (display-line building), `src/watch/` (repo auto-refresh), `src/highlight/` (syntax highlighting). Keep git I/O in `src/git/`; don't shell out to git from UI components.
 
 ## Proceed vs. ask
 

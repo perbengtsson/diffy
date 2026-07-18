@@ -20,14 +20,8 @@ import {
   upsertComment,
 } from './review/store.js';
 import type { ReviewComment, ReviewSession } from './review/types.js';
-import {
-  buildDisplayLines,
-  collapseHunk,
-  expandHunk,
-  extractHunks,
-  findHunkAtLine,
-} from './diff/expand.js';
-import type { DisplayLine, HunkExpansion } from './diff/types.js';
+import { buildDisplayLines } from './diff/expand.js';
+import type { DisplayLine } from './diff/types.js';
 import {
   buildLineHighlightCache,
   type LineHighlightCache,
@@ -103,7 +97,6 @@ export function App({
   const [diffScroll, setDiffScroll] = useState(0);
   const [cursorLine, setCursorLine] = useState(0);
   const [focus, setFocus] = useState<Focus>('files');
-  const [expansions, setExpansions] = useState<Map<string, HunkExpansion>>(new Map());
   const [displayLines, setDisplayLines] = useState<DisplayLine[]>([]);
   const [highlightCache, setHighlightCache] = useState<LineHighlightCache | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -137,8 +130,8 @@ export function App({
   const ensureFileVisibleRef = useRef<string | null>(null);
   const tabViewsRef = useRef<Map<string, TabViewState>>(new Map());
   const prevActivePathRef = useRef<string | null>(null);
-  const viewStateRef = useRef({ cursorLine, diffScroll, expansions });
-  viewStateRef.current = { cursorLine, diffScroll, expansions };
+  const viewStateRef = useRef({ cursorLine, diffScroll });
+  viewStateRef.current = { cursorLine, diffScroll };
 
   const initialPath =
     initialSnapshot.files[findFirstEditedIndex(initialSnapshot.files)]?.path;
@@ -296,7 +289,6 @@ export function App({
     const nextPath = fileTabs.activePath;
     prevActivePathRef.current = nextPath;
     if (!nextPath) {
-      setExpansions(new Map());
       setDiffScroll(0);
       setCursorLine(0);
       return;
@@ -305,7 +297,6 @@ export function App({
     const restored = recallTabView(tabViewsRef.current, nextPath);
     setCursorLine(restored.cursorLine);
     setDiffScroll(restored.diffScroll);
-    setExpansions(restored.expansions);
   }, [fileTabs.activePath]);
 
   useEffect(() => {
@@ -323,7 +314,7 @@ export function App({
 
     let cancelled = false;
     setLoadingDiff(true);
-    buildDisplayLines(selectedFile, snapshot.mode, snapshot.repoRoot, expansions)
+    buildDisplayLines(selectedFile, snapshot.mode, snapshot.repoRoot)
       .then((lines) => {
         if (!cancelled) {
           setDisplayLines(lines);
@@ -340,7 +331,7 @@ export function App({
     return () => {
       cancelled = true;
     };
-  }, [selectedFile, snapshot.mode, snapshot.repoRoot, expansions]);
+  }, [selectedFile, snapshot.mode, snapshot.repoRoot]);
 
   useEffect(() => {
     if (!selectedFile || selectedFile.isBinary) {
@@ -361,11 +352,6 @@ export function App({
       cancelled = true;
     };
   }, [selectedFile, snapshot.mode, snapshot.repoRoot]);
-
-  const hunks = useMemo(
-    () => (selectedFile ? extractHunks(selectedFile.rawDiff, selectedFile.path) : []),
-    [selectedFile],
-  );
 
   const maxFileScroll = Math.max(0, visibleFileRows.length - fileListHeight);
   const maxDiffScroll = Math.max(0, displayLines.length - diffHeight);
@@ -434,7 +420,6 @@ export function App({
       snapshot.mode,
       snapshot.repoRoot,
       searchQuery,
-      expansions,
     )
       .then((matches) => {
         if (!cancelled) {
@@ -459,7 +444,6 @@ export function App({
     treeFiles,
     snapshot.mode,
     snapshot.repoRoot,
-    expansions,
   ]);
 
   useEffect(() => {
@@ -1120,18 +1104,6 @@ export function App({
       setFocus('files');
     } else if (key.return && fileTabs.activePath) {
       fileTabs.pin(fileTabs.activePath);
-    } else if (input === '{' || (key.ctrl && input === 'u')) {
-      const hunk = findHunkAtLine(displayLines, cursorLine, hunks);
-      if (hunk) setExpansions((e) => expandHunk(e, hunk.id, 'before'));
-    } else if (input === '}' || (key.ctrl && input === 'd')) {
-      const hunk = findHunkAtLine(displayLines, cursorLine, hunks);
-      if (hunk) setExpansions((e) => expandHunk(e, hunk.id, 'after'));
-    } else if (input === '[') {
-      const hunk = findHunkAtLine(displayLines, cursorLine, hunks);
-      if (hunk) setExpansions((e) => collapseHunk(e, hunk.id, 'before'));
-    } else if (input === ']') {
-      const hunk = findHunkAtLine(displayLines, cursorLine, hunks);
-      if (hunk) setExpansions((e) => collapseHunk(e, hunk.id, 'after'));
     }
   });
 

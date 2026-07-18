@@ -7,7 +7,6 @@ export type Theme = {
   removedBg: string;
   contextFg: string;
   hunkHeaderFg: string;
-  expandedContextFg: string;
   selectedBg: string;
   selectedFg: string;
   borderFg: string;
@@ -56,7 +55,6 @@ export function getTheme(): Theme {
       removedBg: diffBg.removedBg,
       contextFg: 'black',
       hunkHeaderFg: 'cyan',
-      expandedContextFg: 'blue',
       selectedBg: 'gray',
       selectedFg: 'white',
       borderFg: 'gray',
@@ -74,7 +72,6 @@ export function getTheme(): Theme {
     removedBg: diffBg.removedBg,
     contextFg: 'white',
     hunkHeaderFg: 'cyan',
-    expandedContextFg: 'blue',
     selectedBg: 'gray',
     selectedFg: 'whiteBright',
     borderFg: 'gray',

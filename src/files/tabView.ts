@@ -1,20 +1,16 @@
-import type { HunkExpansion } from '../diff/types.js';
-
 export type TabViewState = {
   cursorLine: number;
   diffScroll: number;
-  expansions: Map<string, HunkExpansion>;
 };
 
 export function emptyTabView(): TabViewState {
-  return { cursorLine: 0, diffScroll: 0, expansions: new Map() };
+  return { cursorLine: 0, diffScroll: 0 };
 }
 
 export function cloneTabView(view: TabViewState): TabViewState {
   return {
     cursorLine: view.cursorLine,
     diffScroll: view.diffScroll,
-    expansions: new Map(view.expansions),
   };
 }
 

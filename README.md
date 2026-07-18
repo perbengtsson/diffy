@@ -1,6 +1,6 @@
 # Diffy
 
-Terminal git diff reviewer with a file list, colorized unified diffs, and per-hunk context expansion.
+Terminal git diff reviewer with a file list and colorized unified diffs.
 
 ## Install
 
@@ -43,8 +43,6 @@ Reviews are cached under `~/.config/diffy/review-<branch>-<YYYY-MM-DD-HHMM>.json
 | `Space` / `l` | Open / focus diff |
 | Double-click | Pin tab (file list or preview tab) |
 | `w` | Close active tab |
-| `{` / `}` | Expand context up/down around current hunk |
-| `[` / `]` | Collapse expanded context |
 | `g` / `G` | Jump to top/bottom of diff |
 | `c` | Comment / edit comment on current line (diff focus) |
 | `o` | Review overview (list comments; Enter jumps) |

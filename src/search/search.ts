@@ -1,6 +1,5 @@
 import { buildDisplayLines } from '../diff/expand.js';
 import type { DisplayLine } from '../diff/types.js';
-import type { HunkExpansion } from '../diff/types.js';
 import type { DiffFile, DiffMode } from '../git/types.js';
 import type { SearchMatch } from './types.js';
 
@@ -39,14 +38,13 @@ export async function findAllFileMatches(
   mode: DiffMode,
   repoRoot: string,
   query: string,
-  expansions: Map<string, HunkExpansion>,
 ): Promise<SearchMatch[]> {
   if (!query) return [];
 
   const matches: SearchMatch[] = [];
   for (const file of files) {
     if (file.isBinary) continue;
-    const lines = await buildDisplayLines(file, mode, repoRoot, expansions);
+    const lines = await buildDisplayLines(file, mode, repoRoot);
     matches.push(...findLineMatches(lines, query, file.path));
   }
 

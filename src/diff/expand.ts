@@ -3,38 +3,7 @@ import type { File } from 'gitdiff-parser';
 import { expandTabs } from '../display/text.js';
 import type { DiffFile, DiffMode } from '../git/types.js';
 import { getFileRevision, readFullFile } from '../git/diff.js';
-import type {
-  DisplayLine,
-  HunkExpansion,
-  HunkMeta,
-} from './types.js';
-
-function hunkId(filePath: string, index: number): string {
-  return `${filePath}#${index}`;
-}
-
-export function extractHunks(rawDiff: string, filePath: string): HunkMeta[] {
-  if (!rawDiff.trim()) return [];
-  try {
-    const parsed = gitDiffParser.parse(rawDiff);
-    const file =
-      parsed.find((f) => f.newPath === filePath || f.oldPath === filePath) ??
-      parsed[0];
-    if (!file) return [];
-    return file.hunks.map((hunk, index) => ({
-      id: hunkId(filePath, index),
-      index,
-      oldStart: hunk.oldStart,
-      oldLines: hunk.oldLines,
-      newStart: hunk.newStart,
-      newLines: hunk.newLines,
-      oldPath: file.oldPath,
-      newPath: file.newPath,
-    }));
-  } catch {
-    return [];
-  }
-}
+import type { DisplayLine } from './types.js';
 
 function findParsedFile(parsed: File[], filePath: string): File | undefined {
   const matches = parsed.filter(
@@ -184,7 +153,6 @@ export async function buildDisplayLines(
   file: DiffFile,
   mode: DiffMode,
   repoRoot: string,
-  _expansions: Map<string, HunkExpansion>,
 ): Promise<DisplayLine[]> {
   if (file.isBinary) {
     return [{ kind: 'binary', content: 'Binary file — no diff preview' }];
@@ -195,56 +163,4 @@ export async function buildDisplayLines(
   }
 
   return buildFullUnifiedLines(file, mode, repoRoot);
-}
-
-export function findHunkAtLine(
-  lines: DisplayLine[],
-  lineIndex: number,
-  hunks: HunkMeta[],
-): HunkMeta | undefined {
-  if (hunks.length === 0) return undefined;
-  if (lineIndex < 0 || lineIndex >= lines.length) return hunks[0];
-
-  const line = lines[lineIndex];
-  if (line?.hunkId) return hunks.find((h) => h.id === line.hunkId);
-
-  for (let i = lineIndex; i >= 0; i--) {
-    const l = lines[i];
-    if (l?.hunkId) return hunks.find((h) => h.id === l.hunkId);
-  }
-  return hunks[0];
-}
-
-export const EXPAND_STEP = 10;
-
-export function expandHunk(
-  expansions: Map<string, HunkExpansion>,
-  id: string,
-  direction: 'before' | 'after',
-  step = EXPAND_STEP,
-): Map<string, HunkExpansion> {
-  const next = new Map(expansions);
-  const current = next.get(id) ?? { before: 0, after: 0 };
-  if (direction === 'before') {
-    next.set(id, { ...current, before: current.before + step });
-  } else {
-    next.set(id, { ...current, after: current.after + step });
-  }
-  return next;
-}
-
-export function collapseHunk(
-  expansions: Map<string, HunkExpansion>,
-  id: string,
-  direction: 'before' | 'after',
-  step = EXPAND_STEP,
-): Map<string, HunkExpansion> {
-  const next = new Map(expansions);
-  const current = next.get(id) ?? { before: 0, after: 0 };
-  if (direction === 'before') {
-    next.set(id, { ...current, before: Math.max(0, current.before - step) });
-  } else {
-    next.set(id, { ...current, after: Math.max(0, current.after - step) });
-  }
-  return next;
 }

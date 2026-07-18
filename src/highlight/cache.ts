@@ -39,7 +39,6 @@ export function tokensForLine(
         : undefined;
     case 'add':
     case 'context':
-    case 'expanded-context':
       return line.newLineNo !== undefined
         ? cache.new.get(line.newLineNo)
         : undefined;

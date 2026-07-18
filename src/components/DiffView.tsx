@@ -48,7 +48,7 @@ function formatLineNo(n: number | undefined, width: number): string {
 }
 
 function isUneditedLine(kind: DisplayLineKind): boolean {
-  return kind === 'context' || kind === 'expanded-context';
+  return kind === 'context';
 }
 
 function diffBackground(line: DisplayLine, theme: Theme): string | undefined {
@@ -321,16 +321,6 @@ function renderLineContent(
             {renderLinePadding(usedWidth, contentWidth, diffBg)}
           </>
         );
-      case 'expanded-context':
-        return renderTokens(
-          highlight && searchQuery
-            ? applySearchHighlight(tokens, searchQuery, highlight, contentWidth)
-            : truncateTokens(tokens, contentWidth),
-          {
-            defaultColor: theme.expandedContextFg,
-            dimColor: true,
-          },
-        );
       case 'context':
         return renderTokens(
           highlight && searchQuery
@@ -366,11 +356,6 @@ function renderLineContent(
           {renderLinePadding(usedWidth, contentWidth, diffBg)}
         </>
       );
-    case 'expanded-context':
-      return renderTextWithSearch(text, searchQuery ?? '', highlight, {
-        color: theme.expandedContextFg,
-        dimColor: true,
-      });
     case 'hunk-header':
       return (
         <Text bold color={theme.hunkHeaderFg}>

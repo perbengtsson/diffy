@@ -95,8 +95,7 @@ export function resolveLineTarget(line: DisplayLine): LineTarget | null {
   if (
     line.kind !== 'add' &&
     line.kind !== 'delete' &&
-    line.kind !== 'context' &&
-    line.kind !== 'expanded-context'
+    line.kind !== 'context'
   ) {
     return null;
   }
