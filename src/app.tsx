@@ -26,6 +26,11 @@ import { saveUserConfig } from './config/userConfig.js';
 import type { DiffMode, DiffSnapshot } from './git/types.js';
 import { loadDiffSnapshot } from './git/diff.js';
 import { compileReview, formatReviewTerminal } from './review/compile.js';
+import { formatAgentFileRef } from './review/agentRef.js';
+import {
+  clipboardInstallHint,
+  copyToClipboard,
+} from './review/clipboard.js';
 import {
   commentedLineKeysForPath,
   findComment,
@@ -145,6 +150,7 @@ export function App({
   const [displayLines, setDisplayLines] = useState<DisplayLine[]>([]);
   const [highlightCache, setHighlightCache] = useState<LineHighlightCache | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loadingDiff, setLoadingDiff] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -270,6 +276,12 @@ export function App({
       Math.min(i, Math.max(0, sortedReviewComments.length - 1)),
     );
   }, [sortedReviewComments.length]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const handle = setTimeout(() => setNotice(null), 2500);
+    return () => clearTimeout(handle);
+  }, [notice]);
 
   useEffect(() => {
     if (skipInitialReviewSaveRef.current) {
@@ -742,6 +754,37 @@ export function App({
     setOverviewOpen(false);
     setError(null);
   }, [displayLines.length, selectedFile]);
+
+  const copyAgentFileRef = useCallback(() => {
+    if (!selectedFile) {
+      setNotice(null);
+      setError('Select a file to copy');
+      return;
+    }
+
+    const line = displayLines[cursorLine];
+    const target = line ? resolveLineTarget(line) : null;
+    if (!target) {
+      setNotice(null);
+      setError(
+        displayLines.length === 0
+          ? 'No diff lines to copy'
+          : 'Cannot copy line from this row',
+      );
+      return;
+    }
+
+    const ref = formatAgentFileRef(selectedFile.path, target.line);
+    void copyToClipboard(ref).then((ok) => {
+      if (ok) {
+        setError(null);
+        setNotice(`Copied ${ref}`);
+      } else {
+        setNotice(null);
+        setError(`Could not copy to clipboard.${clipboardInstallHint()}`);
+      }
+    });
+  }, [cursorLine, displayLines, selectedFile]);
 
   const submitGoToLine = useCallback(() => {
     const trimmed = goToLineDraft.trim();
@@ -1266,6 +1309,11 @@ export function App({
       return;
     }
 
+    if (input === 'l') {
+      copyAgentFileRef();
+      return;
+    }
+
     if (input === 'w' && fileTabs.tabs.length > 0) {
       fileTabs.close();
       return;
@@ -1510,6 +1558,7 @@ export function App({
           modeLabel={snapshot.modeLabel}
           focus={focus}
           error={error}
+          notice={notice}
           theme={theme}
           width={columns}
           watching={watch}

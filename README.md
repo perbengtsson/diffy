@@ -44,6 +44,7 @@ Reviews are cached under `~/.config/diffy/review-<branch>-<YYYY-MM-DD-HHMM>.json
 | Double-click | Pin tab (file list or preview tab) |
 | `w` | Close active tab |
 | `g` | Go to line (enter source line number) |
+| `l` | Copy `@path:line` for the current diff line (agent paste) |
 | `f` | Find in file (Tab toggles all files) |
 | `PgUp` / `PgDn` | Page up/down in diff |
 | `Shift+↓` / `Shift+↑` | Jump to next/previous change block (across files) |

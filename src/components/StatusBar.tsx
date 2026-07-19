@@ -5,6 +5,7 @@ type Props = {
   modeLabel: string;
   focus: 'files' | 'diff';
   error: string | null;
+  notice?: string | null;
   theme: Theme;
   width: number;
   watching?: boolean;
@@ -17,6 +18,7 @@ export function StatusBar({
   modeLabel,
   focus,
   error,
+  notice = null,
   theme,
   width,
   watching = false,
@@ -28,8 +30,8 @@ export function StatusBar({
     bgPickerOpen || hlPickerOpen
       ? '↑/↓:preview Enter:apply Esc:cancel'
       : focus === 'files'
-        ? '↑/↓:nav ⇧↑/↓:change ←/→:fold u:all Tab:diff w:close f:find o:review b:bg h:syntax q:quit r:refresh'
-        : '↑/↓:scroll PgUp/PgDn:page ←/→:tabs c:comment g:line f:find o:review b:bg h:syntax Tab:files w:close q:quit r:refresh';
+        ? '↑/↓:nav ⇧↑/↓:change ←/→:fold u:all Tab:diff w:close l:copy f:find o:review b:bg h:syntax q:quit r:refresh'
+        : '↑/↓:scroll PgUp/PgDn:page ←/→:tabs c:comment g:line l:copy f:find o:review b:bg h:syntax Tab:files w:close q:quit r:refresh';
 
   return (
     <Box width={width}>
@@ -38,7 +40,7 @@ export function StatusBar({
         {watching ? (refreshing ? ' ⟳' : ' ●') : ''}
         {' | '}
         {keys}
-        {error ? ` | ERR: ${error}` : ''}
+        {error ? ` | ERR: ${error}` : notice ? ` | ${notice}` : ''}
       </Text>
     </Box>
   );
