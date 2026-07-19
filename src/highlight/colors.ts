@@ -1,11 +1,14 @@
+import { isLightTerminal } from '../theme.js';
+
 export type HighlightSchema = {
   id: string;
   label: string;
   blurb: string;
-  colors: Record<string, string>;
+  dark: Record<string, string>;
+  light: Record<string, string>;
 };
 
-const DEFAULT_COLORS: Record<string, string> = {
+const DEFAULT_DARK: Record<string, string> = {
   'hljs-keyword': 'magenta',
   'hljs-built_in': 'cyan',
   'hljs-type': 'cyan',
@@ -33,20 +36,50 @@ const DEFAULT_COLORS: Record<string, string> = {
   'hljs-deletion': 'red',
 };
 
+/** Darker / higher-contrast tokens for light terminal backgrounds. */
+const DEFAULT_LIGHT: Record<string, string> = {
+  'hljs-keyword': 'magenta',
+  'hljs-built_in': 'blue',
+  'hljs-type': 'blue',
+  'hljs-literal': 'blue',
+  'hljs-number': 'blue',
+  'hljs-string': 'ansi256(130)',
+  'hljs-regexp': 'ansi256(130)',
+  'hljs-comment': 'ansi256(244)',
+  'hljs-doctag': 'ansi256(244)',
+  'hljs-meta': 'ansi256(244)',
+  'hljs-title': 'ansi256(25)',
+  'hljs-title.function_': 'ansi256(25)',
+  'hljs-function': 'ansi256(25)',
+  'hljs-attr': 'blue',
+  'hljs-attribute': 'blue',
+  'hljs-variable': 'black',
+  'hljs-name': 'red',
+  'hljs-tag': 'red',
+  'hljs-selector-tag': 'red',
+  'hljs-selector-class': 'ansi256(130)',
+  'hljs-selector-id': 'ansi256(130)',
+  'hljs-property': 'ansi256(25)',
+  'hljs-symbol': 'magenta',
+  'hljs-addition': 'green',
+  'hljs-deletion': 'red',
+};
+
 /** Named syntax color maps — pick via `h` in the app. */
 export const HIGHLIGHT_SCHEMAS: HighlightSchema[] = [
   {
     id: 'default',
     label: 'Default',
     blurb: 'Original rainbow tokens',
-    colors: DEFAULT_COLORS,
+    dark: DEFAULT_DARK,
+    light: DEFAULT_LIGHT,
   },
   {
     id: 'monokai',
     label: 'Monokai',
     blurb: 'Pink keywords, green names, warm strings',
-    colors: {
-      ...DEFAULT_COLORS,
+    dark: {
+      ...DEFAULT_DARK,
       'hljs-keyword': 'ansi256(197)',
       'hljs-built_in': 'ansi256(81)',
       'hljs-type': 'ansi256(81)',
@@ -71,13 +104,39 @@ export const HIGHLIGHT_SCHEMAS: HighlightSchema[] = [
       'hljs-property': 'ansi256(81)',
       'hljs-symbol': 'ansi256(197)',
     },
+    light: {
+      ...DEFAULT_LIGHT,
+      'hljs-keyword': 'ansi256(161)',
+      'hljs-built_in': 'ansi256(31)',
+      'hljs-type': 'ansi256(31)',
+      'hljs-literal': 'ansi256(97)',
+      'hljs-number': 'ansi256(97)',
+      'hljs-string': 'ansi256(136)',
+      'hljs-regexp': 'ansi256(136)',
+      'hljs-comment': 'ansi256(102)',
+      'hljs-doctag': 'ansi256(102)',
+      'hljs-meta': 'ansi256(102)',
+      'hljs-title': 'ansi256(64)',
+      'hljs-title.function_': 'ansi256(64)',
+      'hljs-function': 'ansi256(64)',
+      'hljs-attr': 'ansi256(31)',
+      'hljs-attribute': 'ansi256(31)',
+      'hljs-variable': 'black',
+      'hljs-name': 'ansi256(161)',
+      'hljs-tag': 'ansi256(161)',
+      'hljs-selector-tag': 'ansi256(161)',
+      'hljs-selector-class': 'ansi256(64)',
+      'hljs-selector-id': 'ansi256(166)',
+      'hljs-property': 'ansi256(31)',
+      'hljs-symbol': 'ansi256(161)',
+    },
   },
   {
     id: 'github',
     label: 'GitHub',
     blurb: 'Closer to GitHub token hues',
-    colors: {
-      ...DEFAULT_COLORS,
+    dark: {
+      ...DEFAULT_DARK,
       'hljs-keyword': 'ansi256(215)',
       'hljs-built_in': 'ansi256(75)',
       'hljs-type': 'ansi256(75)',
@@ -102,13 +161,39 @@ export const HIGHLIGHT_SCHEMAS: HighlightSchema[] = [
       'hljs-property': 'ansi256(75)',
       'hljs-symbol': 'ansi256(215)',
     },
+    light: {
+      ...DEFAULT_LIGHT,
+      'hljs-keyword': 'ansi256(124)',
+      'hljs-built_in': 'ansi256(25)',
+      'hljs-type': 'ansi256(25)',
+      'hljs-literal': 'ansi256(25)',
+      'hljs-number': 'ansi256(25)',
+      'hljs-string': 'ansi256(28)',
+      'hljs-regexp': 'ansi256(28)',
+      'hljs-comment': 'ansi256(102)',
+      'hljs-doctag': 'ansi256(102)',
+      'hljs-meta': 'ansi256(102)',
+      'hljs-title': 'ansi256(91)',
+      'hljs-title.function_': 'ansi256(91)',
+      'hljs-function': 'ansi256(91)',
+      'hljs-attr': 'ansi256(25)',
+      'hljs-attribute': 'ansi256(25)',
+      'hljs-variable': 'black',
+      'hljs-name': 'ansi256(124)',
+      'hljs-tag': 'ansi256(124)',
+      'hljs-selector-tag': 'ansi256(124)',
+      'hljs-selector-class': 'ansi256(28)',
+      'hljs-selector-id': 'ansi256(28)',
+      'hljs-property': 'ansi256(25)',
+      'hljs-symbol': 'ansi256(124)',
+    },
   },
   {
     id: 'muted',
     label: 'Muted',
     blurb: 'Low-chroma — less rainbow noise',
-    colors: {
-      ...DEFAULT_COLORS,
+    dark: {
+      ...DEFAULT_DARK,
       'hljs-keyword': 'ansi256(176)',
       'hljs-built_in': 'ansi256(109)',
       'hljs-type': 'ansi256(109)',
@@ -133,13 +218,39 @@ export const HIGHLIGHT_SCHEMAS: HighlightSchema[] = [
       'hljs-property': 'ansi256(110)',
       'hljs-symbol': 'ansi256(176)',
     },
+    light: {
+      ...DEFAULT_LIGHT,
+      'hljs-keyword': 'ansi256(96)',
+      'hljs-built_in': 'ansi256(66)',
+      'hljs-type': 'ansi256(66)',
+      'hljs-literal': 'ansi256(66)',
+      'hljs-number': 'ansi256(66)',
+      'hljs-string': 'ansi256(94)',
+      'hljs-regexp': 'ansi256(94)',
+      'hljs-comment': 'ansi256(245)',
+      'hljs-doctag': 'ansi256(245)',
+      'hljs-meta': 'ansi256(245)',
+      'hljs-title': 'ansi256(60)',
+      'hljs-title.function_': 'ansi256(60)',
+      'hljs-function': 'ansi256(60)',
+      'hljs-attr': 'ansi256(66)',
+      'hljs-attribute': 'ansi256(66)',
+      'hljs-variable': 'ansi256(238)',
+      'hljs-name': 'ansi256(131)',
+      'hljs-tag': 'ansi256(131)',
+      'hljs-selector-tag': 'ansi256(131)',
+      'hljs-selector-class': 'ansi256(94)',
+      'hljs-selector-id': 'ansi256(94)',
+      'hljs-property': 'ansi256(60)',
+      'hljs-symbol': 'ansi256(96)',
+    },
   },
   {
     id: 'dracula',
     label: 'Dracula',
     blurb: 'Purple keywords, pink strings, cyan names',
-    colors: {
-      ...DEFAULT_COLORS,
+    dark: {
+      ...DEFAULT_DARK,
       'hljs-keyword': 'ansi256(141)',
       'hljs-built_in': 'ansi256(117)',
       'hljs-type': 'ansi256(117)',
@@ -164,12 +275,38 @@ export const HIGHLIGHT_SCHEMAS: HighlightSchema[] = [
       'hljs-property': 'ansi256(117)',
       'hljs-symbol': 'ansi256(141)',
     },
+    light: {
+      ...DEFAULT_LIGHT,
+      'hljs-keyword': 'ansi256(98)',
+      'hljs-built_in': 'ansi256(31)',
+      'hljs-type': 'ansi256(31)',
+      'hljs-literal': 'ansi256(31)',
+      'hljs-number': 'ansi256(133)',
+      'hljs-string': 'ansi256(166)',
+      'hljs-regexp': 'ansi256(166)',
+      'hljs-comment': 'ansi256(102)',
+      'hljs-doctag': 'ansi256(102)',
+      'hljs-meta': 'ansi256(102)',
+      'hljs-title': 'ansi256(29)',
+      'hljs-title.function_': 'ansi256(29)',
+      'hljs-function': 'ansi256(29)',
+      'hljs-attr': 'ansi256(31)',
+      'hljs-attribute': 'ansi256(31)',
+      'hljs-variable': 'black',
+      'hljs-name': 'ansi256(162)',
+      'hljs-tag': 'ansi256(162)',
+      'hljs-selector-tag': 'ansi256(162)',
+      'hljs-selector-class': 'ansi256(29)',
+      'hljs-selector-id': 'ansi256(166)',
+      'hljs-property': 'ansi256(31)',
+      'hljs-symbol': 'ansi256(98)',
+    },
   },
 ];
 
 export const DEFAULT_HIGHLIGHT_SCHEMA_ID = 'default';
 
-const KNOWN_CLASSES = new Set(Object.keys(DEFAULT_COLORS));
+const KNOWN_CLASSES = new Set(Object.keys(DEFAULT_DARK));
 
 export function findHighlightSchema(id: string): HighlightSchema {
   return (
@@ -177,6 +314,13 @@ export function findHighlightSchema(id: string): HighlightSchema {
     HIGHLIGHT_SCHEMAS.find((s) => s.id === DEFAULT_HIGHLIGHT_SCHEMA_ID) ??
     HIGHLIGHT_SCHEMAS[0]!
   );
+}
+
+export function resolveHighlightColors(
+  schema: HighlightSchema,
+  light = isLightTerminal(),
+): Record<string, string> {
+  return light ? schema.light : schema.dark;
 }
 
 /** Most specific known hljs class from a token's class list (innermost wins). */
@@ -191,16 +335,18 @@ export function matchHighlightClass(classes: string[]): string | undefined {
 export function classToColor(
   classes: string[],
   schemaId: string = DEFAULT_HIGHLIGHT_SCHEMA_ID,
+  light = isLightTerminal(),
 ): string | undefined {
   const matched = matchHighlightClass(classes);
   if (!matched) return undefined;
-  return findHighlightSchema(schemaId).colors[matched];
+  return resolveHighlightColors(findHighlightSchema(schemaId), light)[matched];
 }
 
 export function colorForClass(
   className: string | undefined,
   schemaId: string = DEFAULT_HIGHLIGHT_SCHEMA_ID,
+  light = isLightTerminal(),
 ): string | undefined {
   if (!className) return undefined;
-  return findHighlightSchema(schemaId).colors[className];
+  return resolveHighlightColors(findHighlightSchema(schemaId), light)[className];
 }

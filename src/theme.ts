@@ -137,7 +137,8 @@ export const DIFF_BG_PALETTES: DiffBgPalette[] = [
 
 export const DEFAULT_DIFF_BG_PALETTE_ID = 'slate';
 
-function isLightTerminal(): boolean {
+/** True when COLORFGBG reports a light background (indices 8–15). */
+export function isLightTerminal(): boolean {
   const colorfgbg = process.env.COLORFGBG;
   if (!colorfgbg) return false;
   const parts = colorfgbg.split(';');

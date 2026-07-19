@@ -5,6 +5,7 @@ import {
   colorForClass,
   findHighlightSchema,
   matchHighlightClass,
+  resolveHighlightColors,
   HIGHLIGHT_SCHEMAS,
   DEFAULT_HIGHLIGHT_SCHEMA_ID,
 } from './colors.js';
@@ -31,10 +32,29 @@ describe('highlight schemas', () => {
     assert.equal(matchHighlightClass(['hljs-unknown']), undefined);
   });
 
-  it('resolves different colors per schema', () => {
-    assert.equal(classToColor(['hljs-keyword'], 'default'), 'magenta');
-    assert.equal(classToColor(['hljs-keyword'], 'monokai'), 'ansi256(197)');
-    assert.equal(colorForClass('hljs-string', 'dracula'), 'ansi256(228)');
-    assert.equal(colorForClass(undefined, 'default'), undefined);
+  it('resolves different colors per schema in dark mode', () => {
+    assert.equal(classToColor(['hljs-keyword'], 'default', false), 'magenta');
+    assert.equal(classToColor(['hljs-keyword'], 'monokai', false), 'ansi256(197)');
+    assert.equal(colorForClass('hljs-string', 'dracula', false), 'ansi256(228)');
+    assert.equal(colorForClass(undefined, 'default', false), undefined);
+  });
+
+  it('uses darker tokens for light mode', () => {
+    assert.equal(colorForClass('hljs-variable', 'default', true), 'black');
+    assert.equal(colorForClass('hljs-variable', 'default', false), 'white');
+    assert.equal(colorForClass('hljs-keyword', 'github', true), 'ansi256(124)');
+    assert.equal(colorForClass('hljs-string', 'github', true), 'ansi256(28)');
+    assert.notEqual(
+      colorForClass('hljs-keyword', 'monokai', true),
+      colorForClass('hljs-keyword', 'monokai', false),
+    );
+  });
+
+  it('every schema has matching dark/light class keys', () => {
+    for (const schema of HIGHLIGHT_SCHEMAS) {
+      const dark = resolveHighlightColors(schema, false);
+      const light = resolveHighlightColors(schema, true);
+      assert.deepEqual(Object.keys(light).sort(), Object.keys(dark).sort());
+    }
   });
 });
