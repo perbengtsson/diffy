@@ -93,6 +93,7 @@ async function main() {
       initialReview={initialReview}
       reviewPath={reviewPath}
       initialDiffBgPaletteId={userConfig.diffBgPaletteId}
+      initialHighlightSchemaId={userConfig.highlightSchemaId}
       onQuitReview={({ terminal, plain }) => {
         quitTerminal = terminal;
         quitPlain = plain;

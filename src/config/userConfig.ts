@@ -3,16 +3,24 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { reviewConfigDir } from '../review/store.js';
 import {
+  DEFAULT_HIGHLIGHT_SCHEMA_ID,
+  findHighlightSchema,
+} from '../highlight/colors.js';
+import {
   DEFAULT_DIFF_BG_PALETTE_ID,
   findDiffBgPalette,
 } from '../theme.js';
 
 export type UserConfig = {
   diffBgPaletteId: string;
+  highlightSchemaId: string;
 };
 
 export function defaultUserConfig(): UserConfig {
-  return { diffBgPaletteId: DEFAULT_DIFF_BG_PALETTE_ID };
+  return {
+    diffBgPaletteId: DEFAULT_DIFF_BG_PALETTE_ID,
+    highlightSchemaId: DEFAULT_HIGHLIGHT_SCHEMA_ID,
+  };
 }
 
 export function userConfigPath(home = homedir()): string {
@@ -23,10 +31,15 @@ function normalizeConfig(raw: unknown): UserConfig {
   const defaults = defaultUserConfig();
   if (!raw || typeof raw !== 'object') return defaults;
   const obj = raw as Record<string, unknown>;
-  if (typeof obj.diffBgPaletteId !== 'string' || !obj.diffBgPaletteId) {
-    return defaults;
-  }
-  return { diffBgPaletteId: findDiffBgPalette(obj.diffBgPaletteId).id };
+  const diffBgPaletteId =
+    typeof obj.diffBgPaletteId === 'string' && obj.diffBgPaletteId
+      ? findDiffBgPalette(obj.diffBgPaletteId).id
+      : defaults.diffBgPaletteId;
+  const highlightSchemaId =
+    typeof obj.highlightSchemaId === 'string' && obj.highlightSchemaId
+      ? findHighlightSchema(obj.highlightSchemaId).id
+      : defaults.highlightSchemaId;
+  return { diffBgPaletteId, highlightSchemaId };
 }
 
 export async function loadUserConfig(home = homedir()): Promise<UserConfig> {

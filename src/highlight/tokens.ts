@@ -1,11 +1,12 @@
 import { common, createLowlight } from 'lowlight';
-import { classToColor } from './colors.js';
+import { matchHighlightClass } from './colors.js';
 
 const lowlight = createLowlight(common);
 
 export type HighlightToken = {
   text: string;
-  color?: string;
+  /** hljs class for schema color lookup at render time */
+  className?: string;
 };
 
 type HastNode = {
@@ -21,7 +22,7 @@ function appendToken(
   text: string,
   classes: string[],
 ): number {
-  const color = classToColor(classes);
+  const className = matchHighlightClass(classes);
   const parts = text.split('\n');
   let current = lineIndex;
 
@@ -36,10 +37,10 @@ function appendToken(
 
     const line = lineTokens[current]!;
     const last = line[line.length - 1];
-    if (last && last.color === color) {
+    if (last && last.className === className) {
       last.text += part;
     } else {
-      line.push(color ? { text: part, color } : { text: part });
+      line.push(className ? { text: part, className } : { text: part });
     }
   }
 
@@ -123,11 +124,11 @@ export function truncateTokens(
       continue;
     }
     if (remaining === 1) {
-      out.push({ text: '…', color: token.color });
+      out.push({ text: '…', className: token.className });
     } else {
       out.push({
         text: token.text.slice(0, remaining - 1) + '…',
-        color: token.color,
+        className: token.className,
       });
     }
     remaining = 0;

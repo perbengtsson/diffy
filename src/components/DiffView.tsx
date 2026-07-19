@@ -2,6 +2,10 @@ import type { ReactNode } from 'react';
 import { Box, Text } from 'ink';
 import type { LineHighlightCache } from '../highlight/cache.js';
 import { tokensForLine } from '../highlight/cache.js';
+import {
+  colorForClass,
+  DEFAULT_HIGHLIGHT_SCHEMA_ID,
+} from '../highlight/colors.js';
 import type { HighlightToken } from '../highlight/tokens.js';
 import { truncateTokens } from '../highlight/tokens.js';
 import type { DisplayLine, DisplayLineKind } from '../diff/types.js';
@@ -19,6 +23,7 @@ type Props = {
   focused: boolean;
   theme: Theme;
   highlightCache?: LineHighlightCache;
+  highlightSchemaId?: string;
   searchQuery?: string;
   searchMatchLines?: ReadonlySet<number>;
   activeSearchLine?: number;
@@ -40,7 +45,18 @@ function searchStyle(highlight?: 'match' | 'active'): SearchHighlightStyle | und
   return undefined;
 }
 
-type RenderToken = HighlightToken & { backgroundColor?: string };
+type ColoredToken = { text: string; color?: string };
+type RenderToken = ColoredToken & { backgroundColor?: string };
+
+function colorizeTokens(
+  tokens: HighlightToken[],
+  schemaId: string,
+): ColoredToken[] {
+  return tokens.map((token) => ({
+    text: token.text,
+    color: colorForClass(token.className, schemaId),
+  }));
+}
 
 function formatLineNo(n: number | undefined, width: number): string {
   if (n === undefined) return ' '.repeat(width);
@@ -145,16 +161,14 @@ function mergeRenderTokens(tokens: RenderToken[]): RenderToken[] {
 }
 
 function applySearchHighlight(
-  tokens: HighlightToken[],
+  tokens: ColoredToken[],
   query: string,
   style: SearchHighlightStyle,
-  maxWidth: number,
 ): RenderToken[] {
-  const truncated = truncateTokens(tokens, maxWidth);
-  if (!query) return truncated;
+  if (!query) return tokens;
 
   const styled: RenderToken[] = [];
-  for (const token of truncated) {
+  for (const token of tokens) {
     for (const ch of token.text) {
       styled.push({ text: ch, color: token.color });
     }
@@ -169,6 +183,20 @@ function applySearchHighlight(
   }
 
   return mergeRenderTokens(styled);
+}
+
+function prepareTokens(
+  tokens: HighlightToken[],
+  schemaId: string,
+  contentWidth: number,
+  searchQuery: string | undefined,
+  searchHighlight: SearchHighlightStyle | undefined,
+): RenderToken[] {
+  const colored = colorizeTokens(truncateTokens(tokens, contentWidth), schemaId);
+  if (searchHighlight && searchQuery) {
+    return applySearchHighlight(colored, searchQuery, searchHighlight);
+  }
+  return colored;
 }
 
 function renderGutter(
@@ -285,6 +313,7 @@ function renderLineContent(
   theme: Theme,
   contentWidth: number,
   highlightCache: LineHighlightCache | undefined,
+  highlightSchemaId: string,
   searchQuery: string | undefined,
   searchHighlight?: 'match' | 'active',
 ) {
@@ -295,38 +324,30 @@ function renderLineContent(
   const usedWidth = usedContentWidth(line, highlightCache, contentWidth);
 
   if (tokens) {
+    const prepared = prepareTokens(
+      tokens,
+      highlightSchemaId,
+      contentWidth,
+      searchQuery,
+      highlight,
+    );
     switch (line.kind) {
       case 'add':
         return (
           <>
-            {renderTokens(
-              highlight && searchQuery
-                ? applySearchHighlight(tokens, searchQuery, highlight, contentWidth)
-                : truncateTokens(tokens, contentWidth),
-              { bold, backgroundColor: diffBg },
-            )}
+            {renderTokens(prepared, { bold, backgroundColor: diffBg })}
             {renderLinePadding(usedWidth, contentWidth, diffBg)}
           </>
         );
       case 'delete':
         return (
           <>
-            {renderTokens(
-              highlight && searchQuery
-                ? applySearchHighlight(tokens, searchQuery, highlight, contentWidth)
-                : truncateTokens(tokens, contentWidth),
-              { bold, backgroundColor: diffBg },
-            )}
+            {renderTokens(prepared, { bold, backgroundColor: diffBg })}
             {renderLinePadding(usedWidth, contentWidth, diffBg)}
           </>
         );
       case 'context':
-        return renderTokens(
-          highlight && searchQuery
-            ? applySearchHighlight(tokens, searchQuery, highlight, contentWidth)
-            : truncateTokens(tokens, contentWidth),
-          { defaultColor: theme.contextFg },
-        );
+        return renderTokens(prepared, { defaultColor: theme.contextFg });
     }
   }
 
@@ -389,6 +410,7 @@ export function DiffView({
   focused,
   theme,
   highlightCache,
+  highlightSchemaId = DEFAULT_HIGHLIGHT_SCHEMA_ID,
   searchQuery,
   searchMatchLines,
   activeSearchLine,
@@ -448,6 +470,7 @@ export function DiffView({
                       theme,
                       contentWidth,
                       highlightCache,
+                      highlightSchemaId,
                       searchQuery,
                       searchHighlight,
                     )}

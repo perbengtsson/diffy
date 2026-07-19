@@ -9,6 +9,7 @@ import { CommentBar } from './components/CommentBar.js';
 import { GoToLineBar } from './components/GoToLineBar.js';
 import { ReviewOverview } from './components/ReviewOverview.js';
 import { DiffBgPicker } from './components/DiffBgPicker.js';
+import { HighlightSchemaPicker } from './components/HighlightSchemaPicker.js';
 import { RepoBar } from './components/RepoBar.js';
 import { StatusBar } from './components/StatusBar.js';
 import { TabBar, layoutTabBar, hitTestTab } from './components/TabBar.js';
@@ -17,6 +18,10 @@ import {
   DIFF_BG_PALETTES,
   getTheme,
 } from './theme.js';
+import {
+  DEFAULT_HIGHLIGHT_SCHEMA_ID,
+  HIGHLIGHT_SCHEMAS,
+} from './highlight/colors.js';
 import { saveUserConfig } from './config/userConfig.js';
 import type { DiffMode, DiffSnapshot } from './git/types.js';
 import { loadDiffSnapshot } from './git/diff.js';
@@ -89,6 +94,7 @@ type Props = {
   initialReview: ReviewSession;
   reviewPath: string;
   initialDiffBgPaletteId?: string;
+  initialHighlightSchemaId?: string;
   onQuitReview?: (payload: { terminal: string; plain: string }) => void;
 };
 
@@ -99,6 +105,7 @@ export function App({
   initialReview,
   reviewPath,
   initialDiffBgPaletteId = DEFAULT_DIFF_BG_PALETTE_ID,
+  initialHighlightSchemaId = DEFAULT_HIGHLIGHT_SCHEMA_ID,
   onQuitReview,
 }: Props) {
   const { exit } = useApp();
@@ -107,6 +114,12 @@ export function App({
   const [bgPickerOpen, setBgPickerOpen] = useState(false);
   const [bgPickerIndex, setBgPickerIndex] = useState(0);
   const [bgPickerSavedId, setBgPickerSavedId] = useState(initialDiffBgPaletteId);
+  const [highlightSchemaId, setHighlightSchemaId] = useState(
+    initialHighlightSchemaId,
+  );
+  const [hlPickerOpen, setHlPickerOpen] = useState(false);
+  const [hlPickerIndex, setHlPickerIndex] = useState(0);
+  const [hlPickerSavedId, setHlPickerSavedId] = useState(initialHighlightSchemaId);
   const theme = useMemo(() => {
     if (bgPickerOpen) {
       const previewId = DIFF_BG_PALETTES[bgPickerIndex]?.id ?? diffBgPaletteId;
@@ -114,6 +127,10 @@ export function App({
     }
     return getTheme(diffBgPaletteId);
   }, [bgPickerIndex, bgPickerOpen, diffBgPaletteId]);
+  const activeHighlightSchemaId = hlPickerOpen
+    ? (HIGHLIGHT_SCHEMAS[hlPickerIndex]?.id ?? highlightSchemaId)
+    : highlightSchemaId;
+  const leftPickerOpen = bgPickerOpen || hlPickerOpen;
 
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [fileRowIndex, setFileRowIndex] = useState(0);
@@ -176,7 +193,7 @@ export function App({
   const modeRef = useRef(initialSnapshot.mode);
   modeRef.current = snapshot.mode;
 
-  const filePaneWidth = bgPickerOpen
+  const filePaneWidth = leftPickerOpen
     ? Math.max(40, Math.min(56, Math.floor(columns * 0.42)))
     : Math.max(25, Math.min(37, Math.floor(columns * 0.28) + 5));
   const diffPaneWidth = Math.max(30, columns - filePaneWidth - 1);
@@ -1109,7 +1126,10 @@ export function App({
         const chosen = DIFF_BG_PALETTES[bgPickerIndex];
         if (chosen) {
           setDiffBgPaletteId(chosen.id);
-          void saveUserConfig({ diffBgPaletteId: chosen.id }).catch((err) => {
+          void saveUserConfig({
+            diffBgPaletteId: chosen.id,
+            highlightSchemaId,
+          }).catch((err) => {
             setError(err instanceof Error ? err.message : String(err));
           });
         }
@@ -1122,6 +1142,37 @@ export function App({
       }
       if (key.upArrow) {
         setBgPickerIndex((i) => Math.max(0, i - 1));
+        return;
+      }
+      return;
+    }
+
+    if (hlPickerOpen) {
+      if (key.escape) {
+        setHighlightSchemaId(hlPickerSavedId);
+        setHlPickerOpen(false);
+        return;
+      }
+      if (key.return) {
+        const chosen = HIGHLIGHT_SCHEMAS[hlPickerIndex];
+        if (chosen) {
+          setHighlightSchemaId(chosen.id);
+          void saveUserConfig({
+            diffBgPaletteId,
+            highlightSchemaId: chosen.id,
+          }).catch((err) => {
+            setError(err instanceof Error ? err.message : String(err));
+          });
+        }
+        setHlPickerOpen(false);
+        return;
+      }
+      if (key.downArrow) {
+        setHlPickerIndex((i) => Math.min(HIGHLIGHT_SCHEMAS.length - 1, i + 1));
+        return;
+      }
+      if (key.upArrow) {
+        setHlPickerIndex((i) => Math.max(0, i - 1));
         return;
       }
       return;
@@ -1181,6 +1232,22 @@ export function App({
       setBgPickerSavedId(diffBgPaletteId);
       setBgPickerIndex(index);
       setBgPickerOpen(true);
+      setHlPickerOpen(false);
+      setCommentOpen(false);
+      setGoToLineOpen(false);
+      setOverviewOpen(false);
+      return;
+    }
+
+    if (input === 'h') {
+      const index = Math.max(
+        0,
+        HIGHLIGHT_SCHEMAS.findIndex((s) => s.id === highlightSchemaId),
+      );
+      setHlPickerSavedId(highlightSchemaId);
+      setHlPickerIndex(index);
+      setHlPickerOpen(true);
+      setBgPickerOpen(false);
       setCommentOpen(false);
       setGoToLineOpen(false);
       setOverviewOpen(false);
@@ -1345,6 +1412,14 @@ export function App({
                 theme={theme}
                 activePaletteId={bgPickerSavedId}
               />
+            ) : hlPickerOpen ? (
+              <HighlightSchemaPicker
+                selectedIndex={hlPickerIndex}
+                height={contentHeight}
+                width={filePaneWidth}
+                theme={theme}
+                activeSchemaId={hlPickerSavedId}
+              />
             ) : (
               <>
                 <RepoBar name={repoName} width={filePaneWidth} theme={theme} />
@@ -1385,10 +1460,12 @@ export function App({
                 !searchOpen &&
                 !commentOpen &&
                 !goToLineOpen &&
-                !bgPickerOpen
+                !bgPickerOpen &&
+                !hlPickerOpen
               }
               theme={theme}
               highlightCache={highlightCache ?? undefined}
+              highlightSchemaId={activeHighlightSchemaId}
               searchQuery={searchOpen ? searchQuery : undefined}
               searchMatchLines={currentFileSearchLines}
               activeSearchLine={activeSearchLine}
@@ -1431,6 +1508,7 @@ export function App({
           watching={watch}
           refreshing={refreshing}
           bgPickerOpen={bgPickerOpen}
+          hlPickerOpen={hlPickerOpen}
         />
       )}
     </Box>
