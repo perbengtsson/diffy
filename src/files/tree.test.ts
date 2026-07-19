@@ -1,13 +1,18 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { DiffFile } from '../git/types.js';
-import { buildFileTree, flattenFilesInTreeOrder } from './tree.js';
+import {
+  buildFileTree,
+  buildInitialCollapsedDirs,
+  flattenFilesInTreeOrder,
+  refreshCollapsedDirs,
+} from './tree.js';
 
-function file(path: string): DiffFile {
+function file(path: string, status: DiffFile['status'] = 'modified'): DiffFile {
   return {
     path,
-    status: 'modified',
-    additions: 1,
+    status,
+    additions: status === 'unchanged' ? 0 : 1,
     deletions: 0,
     rawDiff: '',
     isBinary: false,
@@ -24,5 +29,37 @@ describe('flattenFilesInTreeOrder', () => {
       ordered.map((f) => f.path),
       ['nested/b.ts', 'a.ts', 'z.ts'],
     );
+  });
+});
+
+describe('refreshCollapsedDirs', () => {
+  it('expands dirs that newly contain edits after refresh', () => {
+    const before = [
+      file('src/a.ts', 'unchanged'),
+      file('src/nested/b.ts', 'unchanged'),
+      file('lib/c.ts', 'modified'),
+    ];
+    const collapsed = buildInitialCollapsedDirs(before);
+    assert.ok(collapsed.has('src'));
+    assert.ok(collapsed.has('src/nested'));
+    assert.ok(!collapsed.has('lib'));
+
+    const after = [
+      file('src/a.ts', 'unchanged'),
+      file('src/nested/b.ts', 'modified'),
+      file('lib/c.ts', 'modified'),
+    ];
+    const next = refreshCollapsedDirs(collapsed, after);
+    assert.ok(!next.has('src'));
+    assert.ok(!next.has('src/nested'));
+    assert.ok(!next.has('lib'));
+  });
+
+  it('prunes dirs that no longer exist', () => {
+    const collapsed = new Set(['gone', 'src']);
+    const files = [file('src/a.ts', 'unchanged')];
+    const next = refreshCollapsedDirs(collapsed, files);
+    assert.ok(!next.has('gone'));
+    assert.ok(next.has('src'));
   });
 });

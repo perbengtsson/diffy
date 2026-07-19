@@ -65,7 +65,7 @@ import {
   flattenFilesInTreeOrder,
   expandDirsForPath,
   isEditedFile,
-  pruneCollapsedDirs,
+  refreshCollapsedDirs,
   toggleDirCollapsed,
 } from './files/tree.js';
 import { buildChangeSummary } from './files/summary.js';
@@ -190,6 +190,7 @@ export function App({
   );
 
   const refreshingRef = useRef(false);
+  const pendingRefreshRef = useRef(false);
   const modeRef = useRef(initialSnapshot.mode);
   modeRef.current = snapshot.mode;
 
@@ -286,15 +287,21 @@ export function App({
   }, [reviewSession]);
 
   const refresh = useCallback(async () => {
-    if (refreshingRef.current) return;
+    if (refreshingRef.current) {
+      pendingRefreshRef.current = true;
+      return;
+    }
     refreshingRef.current = true;
     setRefreshing(true);
     try {
-      setError(null);
-      const next = await loadDiffSnapshot(cwd, modeRef.current);
-      setSnapshot(next);
-      setCollapsedDirs((prev) => pruneCollapsedDirs(prev, next.files));
-      fileTabs.prune(new Set(next.files.map((f) => f.path)));
+      do {
+        pendingRefreshRef.current = false;
+        setError(null);
+        const next = await loadDiffSnapshot(cwd, modeRef.current);
+        setSnapshot(next);
+        setCollapsedDirs((prev) => refreshCollapsedDirs(prev, next.files));
+        fileTabs.prune(new Set(next.files.map((f) => f.path)));
+      } while (pendingRefreshRef.current);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

@@ -192,3 +192,15 @@ export function pruneCollapsedDirs(
   }
   return next;
 }
+
+/** After a snapshot refresh: drop stale dirs and keep dirs with edits expanded. */
+export function refreshCollapsedDirs(
+  collapsedDirs: ReadonlySet<string>,
+  files: DiffFile[],
+): Set<string> {
+  const next = pruneCollapsedDirs(collapsedDirs, files);
+  for (const dir of buildDirsWithChanges(files)) {
+    next.delete(dir);
+  }
+  return next;
+}
