@@ -29,9 +29,10 @@ function markColor(mark: ScrollMark, theme: Theme, inViewport: boolean): string 
 }
 
 function markChar(mark: ScrollMark, inViewport: boolean): string {
+  // Right-biased glyphs so the track sits flush on the terminal edge.
   if (inViewport) return '█';
-  if (mark === 'none') return '│';
-  return '▌';
+  if (mark === 'none') return '▕';
+  return '▐';
 }
 
 export function DiffScrollBar({

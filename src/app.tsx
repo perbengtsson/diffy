@@ -203,7 +203,7 @@ export function App({
   const filePaneWidth = leftPickerOpen
     ? Math.max(40, Math.min(56, Math.floor(columns * 0.42)))
     : Math.max(25, Math.min(37, Math.floor(columns * 0.28) + 5));
-  const diffPaneWidth = Math.max(30, columns - filePaneWidth - 1);
+  const diffPaneWidth = Math.max(30, columns - filePaneWidth);
   const contentHeight = Math.max(5, rows - 2);
   const tabBarHeight = 1;
   const fileHeaderHeight = 1;

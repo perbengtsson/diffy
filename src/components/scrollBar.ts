@@ -1,7 +1,14 @@
 import type { DisplayLine } from '../diff/types.js';
 
 export const SCROLLBAR_WIDTH = 1;
+/** Blank column between diff content and the scrollbar track. */
+export const SCROLLBAR_GAP = 1;
 export const SCROLLBAR_HIT_WIDTH = 3;
+
+/** Total columns reserved on the right when the scrollbar is shown. */
+export function scrollBarChromeWidth(visible: boolean): number {
+  return visible ? SCROLLBAR_WIDTH + SCROLLBAR_GAP : 0;
+}
 
 export type ScrollMark = 'none' | 'add' | 'delete' | 'both';
 

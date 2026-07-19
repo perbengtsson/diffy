@@ -10,7 +10,11 @@ import type { HighlightToken } from '../highlight/tokens.js';
 import { truncateTokens } from '../highlight/tokens.js';
 import type { DisplayLine, DisplayLineKind } from '../diff/types.js';
 import type { Theme } from '../theme.js';
-import { SCROLLBAR_WIDTH, needsScrollBar } from './scrollBar.js';
+import {
+  SCROLLBAR_GAP,
+  needsScrollBar,
+  scrollBarChromeWidth,
+} from './scrollBar.js';
 import { DiffScrollBar } from './DiffScrollBar.js';
 import { displayLineCommentKey } from '../review/store.js';
 
@@ -419,10 +423,9 @@ export function DiffView({
 }: Props) {
   const innerHeight = Math.max(1, height);
   const showScrollBar = needsScrollBar(lines.length, innerHeight);
-  const contentWidth = Math.max(
-    10,
-    width - GUTTER_WIDTH - (showScrollBar ? SCROLLBAR_WIDTH : 0),
-  );
+  const chromeWidth = scrollBarChromeWidth(showScrollBar);
+  const linesWidth = Math.max(10, width - chromeWidth);
+  const contentWidth = Math.max(10, linesWidth - GUTTER_WIDTH);
   const visible = lines.slice(scrollOffset, scrollOffset + innerHeight);
 
   return (
@@ -432,8 +435,8 @@ export function DiffView({
           <Text bold color={theme.dimFg}>{emptyMessage}</Text>
         </Box>
       ) : (
-        <Box flexDirection="row" height={innerHeight}>
-          <Box flexDirection="column" flexGrow={1}>
+        <Box flexDirection="row" width={width} height={innerHeight}>
+          <Box flexDirection="column" width={linesWidth}>
             {visible.map((line, i) => {
               const absoluteIndex = scrollOffset + i;
               const atCursor = focused && absoluteIndex === cursorLine;
@@ -480,13 +483,16 @@ export function DiffView({
             })}
           </Box>
           {showScrollBar && (
-            <DiffScrollBar
-              lines={lines}
-              scrollOffset={scrollOffset}
-              viewportHeight={innerHeight}
-              height={innerHeight}
-              theme={theme}
-            />
+            <>
+              <Box width={SCROLLBAR_GAP} height={innerHeight} />
+              <DiffScrollBar
+                lines={lines}
+                scrollOffset={scrollOffset}
+                viewportHeight={innerHeight}
+                height={innerHeight}
+                theme={theme}
+              />
+            </>
           )}
         </Box>
       )}
