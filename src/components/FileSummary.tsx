@@ -14,12 +14,20 @@ function padLabel(label: string, width: number): string {
   return label.padEnd(width);
 }
 
+/**
+ * Rows occupied by FileSummary, including the top border.
+ * Must stay in sync with the rendered layout so the file list height is exact.
+ */
 export function fileSummaryHeight(
   summary: ChangeSummary,
   maxTypeRows = 5,
 ): number {
+  // borderTop (1) + title (1) + body
   if (summary.fileCount === 0) return 3;
-  return 2 + Math.min(summary.byType.length, maxTypeRows);
+  const typeRows = Math.min(summary.byType.length, maxTypeRows);
+  const moreRow = summary.byType.length > maxTypeRows ? 1 : 0;
+  // border + title + totals + type rows + optional "+N more"
+  return 3 + typeRows + moreRow;
 }
 
 export function FileSummary({
@@ -31,11 +39,13 @@ export function FileSummary({
   const labelWidth = Math.min(6, Math.max(4, Math.floor(width * 0.22)));
   const visibleTypes = summary.byType.slice(0, maxTypeRows);
   const hiddenTypeCount = summary.byType.length - visibleTypes.length;
+  const height = fileSummaryHeight(summary, maxTypeRows);
 
   return (
     <Box
       flexDirection="column"
       width={width}
+      height={height}
       borderStyle="single"
       borderTop
       borderBottom={false}
@@ -44,12 +54,16 @@ export function FileSummary({
       borderColor={theme.borderFg}
       paddingX={1}
     >
-      <Text bold color={theme.defaultFg}>Summary</Text>
+      <Text bold color={theme.defaultFg} wrap="truncate">
+        Summary
+      </Text>
       {summary.fileCount === 0 ? (
-        <Text color={theme.dimFg} dimColor>No changes</Text>
+        <Text color={theme.dimFg} dimColor wrap="truncate">
+          No changes
+        </Text>
       ) : (
         <>
-          <Text color={theme.dimFg}>
+          <Text color={theme.dimFg} wrap="truncate">
             <Text bold color="green">+{summary.totalAdditions}</Text>
             {' '}
             <Text bold color="red">-{summary.totalDeletions}</Text>
@@ -57,7 +71,7 @@ export function FileSummary({
             <Text dimColor>({summary.fileCount} files)</Text>
           </Text>
           {visibleTypes.map((type) => (
-            <Text key={type.label} color={theme.dimFg}>
+            <Text key={type.label} color={theme.dimFg} wrap="truncate">
               {padLabel(type.label, labelWidth)}
               <Text dimColor> {type.fileCount} </Text>
               {type.additions > 0 && (
@@ -73,7 +87,7 @@ export function FileSummary({
             </Text>
           ))}
           {hiddenTypeCount > 0 && (
-            <Text color={theme.dimFg} dimColor>
+            <Text color={theme.dimFg} dimColor wrap="truncate">
               +{hiddenTypeCount} more
             </Text>
           )}
