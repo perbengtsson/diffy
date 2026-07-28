@@ -85,6 +85,11 @@ import {
   type TabViewState,
 } from './files/tabView.js';
 import { scrollOffsetFromTrackRow, isScrollBarHit, centeredScrollOffset } from './components/scrollBar.js';
+import {
+  clampFilePaneWidth,
+  defaultFilePaneWidth,
+  isSplitBorderHit,
+} from './layout/filePane.js';
 import { findAllFileMatches, findLineMatches } from './search/search.js';
 import type { SearchMatch, SearchScope } from './search/types.js';
 
@@ -167,6 +172,7 @@ export function App({
   const [goToLineDraft, setGoToLineDraft] = useState('');
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [overviewIndex, setOverviewIndex] = useState(0);
+  const [filePaneWidthUser, setFilePaneWidthUser] = useState<number | null>(null);
 
   const pendingSearchMatchRef = useRef<SearchMatch | null>(null);
   const pendingReviewJumpRef = useRef<ReviewComment | null>(null);
@@ -181,6 +187,7 @@ export function App({
   const skipInitialReviewSaveRef = useRef(true);
 
   const scrollbarDragRef = useRef(false);
+  const splitDragRef = useRef(false);
   const doubleClickRef = useRef(EMPTY_DOUBLE_CLICK);
   const ensureFileVisibleRef = useRef<string | null>(null);
   const syncFileRowToActiveRef = useRef(false);
@@ -201,8 +208,11 @@ export function App({
   modeRef.current = snapshot.mode;
 
   const filePaneWidth = leftPickerOpen
-    ? Math.max(40, Math.min(56, Math.floor(columns * 0.42)))
-    : Math.max(25, Math.min(37, Math.floor(columns * 0.28) + 5));
+    ? defaultFilePaneWidth(columns, true)
+    : clampFilePaneWidth(
+        filePaneWidthUser ?? defaultFilePaneWidth(columns, false),
+        columns,
+      );
   const diffPaneWidth = Math.max(30, columns - filePaneWidth);
   const contentHeight = Math.max(5, rows - 2);
   const tabBarHeight = 1;
@@ -918,10 +928,15 @@ export function App({
 
       if (event.kind === 'release') {
         scrollbarDragRef.current = false;
+        splitDragRef.current = false;
         return;
       }
 
       if (event.kind === 'drag') {
+        if (splitDragRef.current) {
+          setFilePaneWidthUser(clampFilePaneWidth(event.x, columns));
+          return;
+        }
         if (!scrollbarDragRef.current || displayLines.length === 0) return;
         const diffLocalY = event.y - tabBarHeight;
         const trackRow = Math.max(0, Math.min(diffHeight - 1, diffLocalY - 1));
@@ -937,6 +952,16 @@ export function App({
       }
 
       if (event.kind !== 'click') return;
+
+      if (
+        !overviewOpen &&
+        !leftPickerOpen &&
+        isSplitBorderHit(event.x, event.y, filePaneWidth, contentHeight)
+      ) {
+        splitDragRef.current = true;
+        setFilePaneWidthUser(clampFilePaneWidth(event.x, columns));
+        return;
+      }
 
       const diffLocalY = event.y - tabBarHeight;
       if (
@@ -1039,6 +1064,7 @@ export function App({
       }
     },
     [
+      columns,
       contentHeight,
       diffHeight,
       diffPaneWidth,
@@ -1052,8 +1078,10 @@ export function App({
       fileTabs.close,
       fileTabs.pin,
       fileTabs.tabs,
+      leftPickerOpen,
       maxDiffScroll,
       maxFileScroll,
+      overviewOpen,
       scrollBarLayout,
       selectFileRow,
       tabBarHeight,
