@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { basename } from 'node:path';
-import { Box, useApp, useInput } from 'ink';
+import { access } from 'node:fs/promises';
+import { basename, join } from 'node:path';
+import { Box, useApp, useInput, useStdin, useStdout } from 'ink';
 import { FileList } from './components/FileList.js';
 import { FileSummary, fileSummaryHeight } from './components/FileSummary.js';
 import { DiffView } from './components/DiffView.js';
@@ -55,11 +56,17 @@ import { watchRepo } from './watch/repoWatcher.js';
 import { useTerminalSize } from './hooks/useTerminalSize.js';
 import { useFileTabs } from './hooks/useFileTabs.js';
 import { useMouse } from './hooks/useMouse.js';
-import type { MouseEvent } from './mouse/parseMouse.js';
+import {
+  DISABLE_MOUSE,
+  ENABLE_MOUSE,
+  type MouseEvent,
+} from './mouse/parseMouse.js';
 import {
   EMPTY_DOUBLE_CLICK,
   registerClick,
 } from './mouse/doubleClick.js';
+import { workingTreeLineForEdit } from './editor/editorCommand.js';
+import { runExternalEditor } from './editor/runExternalEditor.js';
 import {
   buildFileTree,
   buildDirsWithChanges,
@@ -120,6 +127,8 @@ export function App({
 }: Props) {
   const { exit } = useApp();
   const { columns, rows } = useTerminalSize();
+  const { setRawMode, isRawModeSupported } = useStdin();
+  const { stdout } = useStdout();
   const [diffBgPaletteId, setDiffBgPaletteId] = useState(initialDiffBgPaletteId);
   const [bgPickerOpen, setBgPickerOpen] = useState(false);
   const [bgPickerIndex, setBgPickerIndex] = useState(0);
@@ -173,6 +182,7 @@ export function App({
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [overviewIndex, setOverviewIndex] = useState(0);
   const [filePaneWidthUser, setFilePaneWidthUser] = useState<number | null>(null);
+  const [screenEpoch, setScreenEpoch] = useState(0);
 
   const pendingSearchMatchRef = useRef<SearchMatch | null>(null);
   const pendingReviewJumpRef = useRef<ReviewComment | null>(null);
@@ -188,6 +198,7 @@ export function App({
 
   const scrollbarDragRef = useRef(false);
   const splitDragRef = useRef(false);
+  const editorOpenRef = useRef(false);
   const doubleClickRef = useRef(EMPTY_DOUBLE_CLICK);
   const ensureFileVisibleRef = useRef<string | null>(null);
   const syncFileRowToActiveRef = useRef(false);
@@ -335,6 +346,10 @@ export function App({
   useEffect(() => {
     if (!watch) return;
     return watchRepo(snapshot.repoRoot, () => {
+      if (editorOpenRef.current) {
+        pendingRefreshRef.current = true;
+        return;
+      }
       void refresh();
     });
   }, [watch, snapshot.repoRoot, refresh]);
@@ -796,6 +811,75 @@ export function App({
     });
   }, [cursorLine, displayLines, selectedFile]);
 
+  const openInExternalEditor = useCallback(async () => {
+    if (editorOpenRef.current) return;
+
+    if (!selectedFile) {
+      setNotice(null);
+      setError('Select a file to edit');
+      return;
+    }
+    if (selectedFile.isBinary) {
+      setNotice(null);
+      setError('Cannot edit a binary file');
+      return;
+    }
+    if (selectedFile.status === 'deleted') {
+      setNotice(null);
+      setError('Cannot edit a deleted file');
+      return;
+    }
+
+    const absPath = join(snapshot.repoRoot, selectedFile.path);
+    try {
+      await access(absPath);
+    } catch {
+      setNotice(null);
+      setError(`File not found: ${selectedFile.path}`);
+      return;
+    }
+
+    const line = workingTreeLineForEdit(displayLines[cursorLine]);
+    editorOpenRef.current = true;
+    setError(null);
+    setNotice(null);
+
+    const result = await runExternalEditor({
+      filePath: absPath,
+      line,
+      onBeforeSpawn: () => {
+        stdout.write(DISABLE_MOUSE);
+        stdout.write('\x1b[?25h'); // show cursor for the editor
+        if (isRawModeSupported) setRawMode(false);
+      },
+      onAfterSpawn: () => {
+        if (isRawModeSupported) setRawMode(true);
+        stdout.write('\x1b[?25l');
+        stdout.write(ENABLE_MOUSE);
+      },
+    });
+
+    editorOpenRef.current = false;
+
+    if (!result.ok) {
+      setNotice(null);
+      setError(result.error);
+    }
+
+    // Force a full redraw after the editor trashed the screen, then reload.
+    setScreenEpoch((n) => n + 1);
+    await refresh();
+  }, [
+    cursorLine,
+    displayLines,
+    isRawModeSupported,
+    refresh,
+    selectedFile,
+    setRawMode,
+    snapshot.repoRoot,
+    stdout,
+  ]);
+
   const submitGoToLine = useCallback(() => {
     const trimmed = goToLineDraft.trim();
     setGoToLineOpen(false);
@@ -900,6 +984,7 @@ export function App({
 
   const handleMouseEvent = useCallback(
     (event: MouseEvent) => {
+      if (editorOpenRef.current) return;
       if (event.kind === 'wheel') {
         const delta =
           event.direction === 'down' ? WHEEL_SCROLL_LINES : -WHEEL_SCROLL_LINES;
@@ -1122,6 +1207,7 @@ export function App({
   );
 
   useInput((input, key) => {
+    if (editorOpenRef.current) return;
     if (input.startsWith('\x1b[<')) return;
 
     if (commentOpen) {
@@ -1342,6 +1428,11 @@ export function App({
       return;
     }
 
+    if (input === 'e') {
+      void openInExternalEditor();
+      return;
+    }
+
     if (input === 'w' && fileTabs.tabs.length > 0) {
       fileTabs.close();
       return;
@@ -1473,7 +1564,7 @@ export function App({
   });
 
   return (
-    <Box flexDirection="column" width={columns} height={rows}>
+    <Box key={screenEpoch} flexDirection="column" width={columns} height={rows}>
       {overviewOpen ? (
         <ReviewOverview
           comments={sortedReviewComments}
