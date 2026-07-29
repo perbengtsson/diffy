@@ -13,6 +13,8 @@ type Props = {
   themeMenuOpen?: boolean;
   bgPickerOpen?: boolean;
   hlPickerOpen?: boolean;
+  /** When true, file list includes unchanged files; `d` toggles diffs-only. */
+  showUnedited?: boolean;
 };
 
 export function StatusBar({
@@ -27,14 +29,16 @@ export function StatusBar({
   themeMenuOpen = false,
   bgPickerOpen = false,
   hlPickerOpen = false,
+  showUnedited = true,
 }: Props) {
+  const diffsKey = showUnedited ? 'd:diffs' : 'd:all';
   const keys =
     bgPickerOpen || hlPickerOpen
       ? '↑/↓:preview Enter:apply Esc:back'
       : themeMenuOpen
         ? '↑/↓:select Enter:open b:bg h:syntax Esc:cancel'
         : focus === 'files'
-          ? 'Shift+↑/↓:change u:all Tab:diff h:hide w:close l:copy f:find o:review t:themes q:quit r:refresh'
+          ? `Shift+↑/↓:change ${diffsKey} Tab:diff h:hide w:close l:copy f:find o:review t:themes q:quit r:refresh`
           : 'Shift+↑/↓:change c:comment g:line l:copy f:find o:review t:themes h:files Tab:files w:close q:quit r:refresh';
 
   return (

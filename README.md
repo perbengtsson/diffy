@@ -54,6 +54,7 @@ Reviews are cached under `~/.config/diffy/review-<branch>-<YYYY-MM-DD-HHMM>.json
 | `o` | Review overview (list comments; Enter jumps) |
 | `t` | Themes (diff background + syntax highlight; saved to `~/.config/diffy/config.json`) |
 | `h` | Collapse / expand the files pane |
+| `d` | Toggle diffs-only file list (changed files only ↔ full repo tree) |
 | `r` | Refresh |
 | `q` | Quit (prints + copies review when there are comments; shows resume command) |
 

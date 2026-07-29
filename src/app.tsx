@@ -164,7 +164,7 @@ export function App({
   const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(() =>
     buildInitialCollapsedDirs(initialSnapshot.files),
   );
-  const [showUnedited, setShowUnedited] = useState(true);
+  const [showUnedited, setShowUnedited] = useState(false);
   const [fileScroll, setFileScroll] = useState(0);
   const [diffScroll, setDiffScroll] = useState(0);
   const [cursorLine, setCursorLine] = useState(0);
@@ -1547,8 +1547,9 @@ export function App({
     if (focus === 'files') {
       const currentRow = visibleFileRows[fileRowIndex];
 
-      if (input === 'u') {
+      if (input === 'd') {
         setShowUnedited((show) => !show);
+        syncFileRowToActiveRef.current = true;
         return;
       }
 
@@ -1789,6 +1790,7 @@ export function App({
           themeMenuOpen={themeMenuOpen}
           bgPickerOpen={bgPickerOpen}
           hlPickerOpen={hlPickerOpen}
+          showUnedited={showUnedited}
         />
       )}
     </Box>
