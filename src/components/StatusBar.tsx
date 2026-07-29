@@ -34,8 +34,8 @@ export function StatusBar({
       : themeMenuOpen
         ? '↑/↓:select Enter:open b:bg h:syntax Esc:cancel'
         : focus === 'files'
-          ? '↑/↓:nav ⇧↑/↓:change ←/→:fold u:all Tab:diff w:close l:copy f:find o:review t:themes q:quit r:refresh'
-          : '↑/↓:scroll PgUp/PgDn:page ←/→:tabs c:comment g:line l:copy f:find o:review t:themes Tab:files w:close q:quit r:refresh';
+          ? 'Shift+↑/↓:change u:all Tab:diff w:close l:copy f:find o:review t:themes q:quit r:refresh'
+          : 'Shift+↑/↓:change c:comment g:line l:copy f:find o:review t:themes Tab:files w:close q:quit r:refresh';
 
   return (
     <Box width={width}>
