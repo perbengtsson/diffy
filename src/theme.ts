@@ -27,7 +27,7 @@ export type DiffBgPalette = {
   light: { truecolor: DiffBgPair; ansi256: DiffBgPair };
 };
 
-/** Named alternatives for add/delete row backgrounds — pick via `b` in the app. */
+/** Named alternatives for add/delete row backgrounds — pick via Themes (`t`) in the app. */
 export const DIFF_BG_PALETTES: DiffBgPalette[] = [
   {
     id: 'slate',

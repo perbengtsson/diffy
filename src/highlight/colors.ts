@@ -65,7 +65,7 @@ const DEFAULT_LIGHT: Record<string, string> = {
   'hljs-deletion': 'red',
 };
 
-/** Named syntax color maps — pick via `h` in the app. */
+/** Named syntax color maps — pick via Themes (`t`) in the app. */
 export const HIGHLIGHT_SCHEMAS: HighlightSchema[] = [
   {
     id: 'default',

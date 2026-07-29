@@ -99,7 +99,7 @@ export function HighlightSchemaPicker({
   theme,
   activeSchemaId,
 }: Props) {
-  const header = 'Syntax · ↑↓ · Enter · Esc';
+  const header = 'Syntax · ↑↓ · Enter · Esc back';
   const listHeight = Math.max(1, height - 1);
   const blocksVisible = Math.max(1, Math.floor(listHeight / BLOCK_ROWS));
 

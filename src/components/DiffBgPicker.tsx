@@ -92,7 +92,7 @@ export function DiffBgPicker({
   theme,
   activePaletteId,
 }: Props) {
-  const header = 'Diff bg · ↑↓ · Enter · Esc';
+  const header = 'Diff bg · ↑↓ · Enter · Esc back';
   const listHeight = Math.max(1, height - 1);
   const blocksVisible = Math.max(1, Math.floor(listHeight / BLOCK_ROWS));
 

@@ -11,16 +11,22 @@ import { GoToLineBar } from './components/GoToLineBar.js';
 import { ReviewOverview } from './components/ReviewOverview.js';
 import { DiffBgPicker } from './components/DiffBgPicker.js';
 import { HighlightSchemaPicker } from './components/HighlightSchemaPicker.js';
+import {
+  THEME_MENU_ITEMS,
+  ThemeMenu,
+} from './components/ThemeMenu.js';
 import { RepoBar } from './components/RepoBar.js';
 import { StatusBar } from './components/StatusBar.js';
 import { TabBar, layoutTabBar, hitTestTab } from './components/TabBar.js';
 import {
   DEFAULT_DIFF_BG_PALETTE_ID,
   DIFF_BG_PALETTES,
+  findDiffBgPalette,
   getTheme,
 } from './theme.js';
 import {
   DEFAULT_HIGHLIGHT_SCHEMA_ID,
+  findHighlightSchema,
   HIGHLIGHT_SCHEMAS,
 } from './highlight/colors.js';
 import { saveUserConfig } from './config/userConfig.js';
@@ -130,6 +136,8 @@ export function App({
   const { setRawMode, isRawModeSupported } = useStdin();
   const { stdout } = useStdout();
   const [diffBgPaletteId, setDiffBgPaletteId] = useState(initialDiffBgPaletteId);
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const [themeMenuIndex, setThemeMenuIndex] = useState(0);
   const [bgPickerOpen, setBgPickerOpen] = useState(false);
   const [bgPickerIndex, setBgPickerIndex] = useState(0);
   const [bgPickerSavedId, setBgPickerSavedId] = useState(initialDiffBgPaletteId);
@@ -149,7 +157,7 @@ export function App({
   const activeHighlightSchemaId = hlPickerOpen
     ? (HIGHLIGHT_SCHEMAS[hlPickerIndex]?.id ?? highlightSchemaId)
     : highlightSchemaId;
-  const leftPickerOpen = bgPickerOpen || hlPickerOpen;
+  const leftPickerOpen = themeMenuOpen || bgPickerOpen || hlPickerOpen;
 
   const [snapshot, setSnapshot] = useState(initialSnapshot);
   const [fileRowIndex, setFileRowIndex] = useState(0);
@@ -764,6 +772,9 @@ export function App({
     setSearchOpen(false);
     setGoToLineOpen(false);
     setOverviewOpen(false);
+    setThemeMenuOpen(false);
+    setBgPickerOpen(false);
+    setHlPickerOpen(false);
     setError(null);
   }, [cursorLine, displayLines, selectedFile]);
 
@@ -777,8 +788,60 @@ export function App({
     setCommentOpen(false);
     setSearchOpen(false);
     setOverviewOpen(false);
+    setThemeMenuOpen(false);
+    setBgPickerOpen(false);
+    setHlPickerOpen(false);
     setError(null);
   }, [displayLines.length, selectedFile]);
+
+  const openThemeMenu = useCallback(() => {
+    setThemeMenuOpen(true);
+    setThemeMenuIndex(0);
+    setBgPickerOpen(false);
+    setHlPickerOpen(false);
+    setCommentOpen(false);
+    setGoToLineOpen(false);
+    setOverviewOpen(false);
+    setSearchOpen(false);
+  }, []);
+
+  const openBgPicker = useCallback(() => {
+    const index = Math.max(
+      0,
+      DIFF_BG_PALETTES.findIndex((p) => p.id === diffBgPaletteId),
+    );
+    setBgPickerSavedId(diffBgPaletteId);
+    setBgPickerIndex(index);
+    setBgPickerOpen(true);
+    setThemeMenuOpen(false);
+    setHlPickerOpen(false);
+    setCommentOpen(false);
+    setGoToLineOpen(false);
+    setOverviewOpen(false);
+    setSearchOpen(false);
+  }, [diffBgPaletteId]);
+
+  const openHlPicker = useCallback(() => {
+    const index = Math.max(
+      0,
+      HIGHLIGHT_SCHEMAS.findIndex((s) => s.id === highlightSchemaId),
+    );
+    setHlPickerSavedId(highlightSchemaId);
+    setHlPickerIndex(index);
+    setHlPickerOpen(true);
+    setThemeMenuOpen(false);
+    setBgPickerOpen(false);
+    setCommentOpen(false);
+    setGoToLineOpen(false);
+    setOverviewOpen(false);
+    setSearchOpen(false);
+  }, [highlightSchemaId]);
+
+  const returnToThemeMenu = useCallback(() => {
+    setBgPickerOpen(false);
+    setHlPickerOpen(false);
+    setThemeMenuOpen(true);
+  }, []);
 
   const copyAgentFileRef = useCallback(() => {
     if (!selectedFile) {
@@ -1184,6 +1247,9 @@ export function App({
     setAllSearchMatches([]);
     setGoToLineOpen(false);
     setCommentOpen(false);
+    setThemeMenuOpen(false);
+    setBgPickerOpen(false);
+    setHlPickerOpen(false);
     setFocus('diff');
   }, []);
 
@@ -1283,7 +1349,7 @@ export function App({
     if (bgPickerOpen) {
       if (key.escape) {
         setDiffBgPaletteId(bgPickerSavedId);
-        setBgPickerOpen(false);
+        returnToThemeMenu();
         return;
       }
       if (key.return) {
@@ -1314,7 +1380,7 @@ export function App({
     if (hlPickerOpen) {
       if (key.escape) {
         setHighlightSchemaId(hlPickerSavedId);
-        setHlPickerOpen(false);
+        returnToThemeMenu();
         return;
       }
       if (key.return) {
@@ -1337,6 +1403,38 @@ export function App({
       }
       if (key.upArrow) {
         setHlPickerIndex((i) => Math.max(0, i - 1));
+        return;
+      }
+      return;
+    }
+
+    if (themeMenuOpen) {
+      if (key.escape || input === 't') {
+        setThemeMenuOpen(false);
+        return;
+      }
+      if (key.downArrow) {
+        setThemeMenuIndex((i) =>
+          Math.min(THEME_MENU_ITEMS.length - 1, i + 1),
+        );
+        return;
+      }
+      if (key.upArrow) {
+        setThemeMenuIndex((i) => Math.max(0, i - 1));
+        return;
+      }
+      if (input === 'b') {
+        openBgPicker();
+        return;
+      }
+      if (input === 'h') {
+        openHlPicker();
+        return;
+      }
+      if (key.return) {
+        const item = THEME_MENU_ITEMS[themeMenuIndex];
+        if (item?.id === 'bg') openBgPicker();
+        else if (item?.id === 'syntax') openHlPicker();
         return;
       }
       return;
@@ -1385,36 +1483,14 @@ export function App({
       setOverviewIndex(0);
       setCommentOpen(false);
       setGoToLineOpen(false);
-      return;
-    }
-
-    if (input === 'b') {
-      const index = Math.max(
-        0,
-        DIFF_BG_PALETTES.findIndex((p) => p.id === diffBgPaletteId),
-      );
-      setBgPickerSavedId(diffBgPaletteId);
-      setBgPickerIndex(index);
-      setBgPickerOpen(true);
-      setHlPickerOpen(false);
-      setCommentOpen(false);
-      setGoToLineOpen(false);
-      setOverviewOpen(false);
-      return;
-    }
-
-    if (input === 'h') {
-      const index = Math.max(
-        0,
-        HIGHLIGHT_SCHEMAS.findIndex((s) => s.id === highlightSchemaId),
-      );
-      setHlPickerSavedId(highlightSchemaId);
-      setHlPickerIndex(index);
-      setHlPickerOpen(true);
+      setThemeMenuOpen(false);
       setBgPickerOpen(false);
-      setCommentOpen(false);
-      setGoToLineOpen(false);
-      setOverviewOpen(false);
+      setHlPickerOpen(false);
+      return;
+    }
+
+    if (input === 't') {
+      openThemeMenu();
       return;
     }
 
@@ -1578,7 +1654,16 @@ export function App({
       ) : (
         <Box flexDirection="row" height={contentHeight}>
           <Box flexDirection="column" width={filePaneWidth} height={contentHeight}>
-            {bgPickerOpen ? (
+            {themeMenuOpen ? (
+              <ThemeMenu
+                selectedIndex={themeMenuIndex}
+                height={contentHeight}
+                width={filePaneWidth}
+                theme={theme}
+                bgLabel={findDiffBgPalette(diffBgPaletteId).label}
+                syntaxLabel={findHighlightSchema(highlightSchemaId).label}
+              />
+            ) : bgPickerOpen ? (
               <DiffBgPicker
                 selectedIndex={bgPickerIndex}
                 height={contentHeight}
@@ -1634,6 +1719,7 @@ export function App({
                 !searchOpen &&
                 !commentOpen &&
                 !goToLineOpen &&
+                !themeMenuOpen &&
                 !bgPickerOpen &&
                 !hlPickerOpen
               }
@@ -1682,6 +1768,7 @@ export function App({
           width={columns}
           watching={watch}
           refreshing={refreshing}
+          themeMenuOpen={themeMenuOpen}
           bgPickerOpen={bgPickerOpen}
           hlPickerOpen={hlPickerOpen}
         />

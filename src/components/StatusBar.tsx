@@ -10,6 +10,7 @@ type Props = {
   width: number;
   watching?: boolean;
   refreshing?: boolean;
+  themeMenuOpen?: boolean;
   bgPickerOpen?: boolean;
   hlPickerOpen?: boolean;
 };
@@ -23,15 +24,18 @@ export function StatusBar({
   width,
   watching = false,
   refreshing = false,
+  themeMenuOpen = false,
   bgPickerOpen = false,
   hlPickerOpen = false,
 }: Props) {
   const keys =
     bgPickerOpen || hlPickerOpen
-      ? '↑/↓:preview Enter:apply Esc:cancel'
-      : focus === 'files'
-        ? '↑/↓:nav ⇧↑/↓:change ←/→:fold u:all Tab:diff w:close l:copy f:find o:review b:bg h:syntax q:quit r:refresh'
-        : '↑/↓:scroll PgUp/PgDn:page ←/→:tabs c:comment g:line l:copy f:find o:review b:bg h:syntax Tab:files w:close q:quit r:refresh';
+      ? '↑/↓:preview Enter:apply Esc:back'
+      : themeMenuOpen
+        ? '↑/↓:select Enter:open b:bg h:syntax Esc:cancel'
+        : focus === 'files'
+          ? '↑/↓:nav ⇧↑/↓:change ←/→:fold u:all Tab:diff w:close l:copy f:find o:review t:themes q:quit r:refresh'
+          : '↑/↓:scroll PgUp/PgDn:page ←/→:tabs c:comment g:line l:copy f:find o:review t:themes Tab:files w:close q:quit r:refresh';
 
   return (
     <Box width={width}>
