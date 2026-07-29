@@ -100,8 +100,8 @@ import {
 import { scrollOffsetFromTrackRow, isScrollBarHit, centeredScrollOffset } from './components/scrollBar.js';
 import {
   clampFilePaneWidth,
-  defaultFilePaneWidth,
   isSplitBorderHit,
+  resolveFilePaneWidth,
 } from './layout/filePane.js';
 import { findAllFileMatches, findLineMatches } from './search/search.js';
 import type { SearchMatch, SearchScope } from './search/types.js';
@@ -190,6 +190,7 @@ export function App({
   const [overviewOpen, setOverviewOpen] = useState(false);
   const [overviewIndex, setOverviewIndex] = useState(0);
   const [filePaneWidthUser, setFilePaneWidthUser] = useState<number | null>(null);
+  const [filePaneCollapsed, setFilePaneCollapsed] = useState(false);
   const [screenEpoch, setScreenEpoch] = useState(0);
 
   const pendingSearchMatchRef = useRef<SearchMatch | null>(null);
@@ -226,13 +227,14 @@ export function App({
   const modeRef = useRef(initialSnapshot.mode);
   modeRef.current = snapshot.mode;
 
-  const filePaneWidth = leftPickerOpen
-    ? defaultFilePaneWidth(columns, true)
-    : clampFilePaneWidth(
-        filePaneWidthUser ?? defaultFilePaneWidth(columns, false),
-        columns,
-      );
-  const diffPaneWidth = Math.max(30, columns - filePaneWidth);
+  const filePaneWidth = resolveFilePaneWidth({
+    columns,
+    collapsed: filePaneCollapsed,
+    leftPickerOpen,
+    userWidth: filePaneWidthUser,
+  });
+  const diffPaneWidth =
+    filePaneWidth === 0 ? columns : Math.max(30, columns - filePaneWidth);
   const contentHeight = Math.max(5, rows - 2);
   const tabBarHeight = 1;
   const fileHeaderHeight = 1;
@@ -1104,6 +1106,7 @@ export function App({
       if (
         !overviewOpen &&
         !leftPickerOpen &&
+        filePaneWidth > 0 &&
         isSplitBorderHit(event.x, event.y, filePaneWidth, contentHeight)
       ) {
         splitDragRef.current = true;
@@ -1515,7 +1518,20 @@ export function App({
     }
 
     if (key.tab) {
-      setFocus((f) => (f === 'files' ? 'diff' : 'files'));
+      if (focus === 'files') {
+        setFocus('diff');
+      } else {
+        if (filePaneCollapsed) setFilePaneCollapsed(false);
+        setFocus('files');
+      }
+      return;
+    }
+
+    if (input === 'h') {
+      if (!filePaneCollapsed && focus === 'files' && !leftPickerOpen) {
+        setFocus('diff');
+      }
+      setFilePaneCollapsed((collapsed) => !collapsed);
       return;
     }
 
@@ -1653,53 +1669,55 @@ export function App({
         />
       ) : (
         <Box flexDirection="row" height={contentHeight}>
-          <Box flexDirection="column" width={filePaneWidth} height={contentHeight}>
-            {themeMenuOpen ? (
-              <ThemeMenu
-                selectedIndex={themeMenuIndex}
-                height={contentHeight}
-                width={filePaneWidth}
-                theme={theme}
-                bgLabel={findDiffBgPalette(diffBgPaletteId).label}
-                syntaxLabel={findHighlightSchema(highlightSchemaId).label}
-              />
-            ) : bgPickerOpen ? (
-              <DiffBgPicker
-                selectedIndex={bgPickerIndex}
-                height={contentHeight}
-                width={filePaneWidth}
-                theme={theme}
-                activePaletteId={bgPickerSavedId}
-              />
-            ) : hlPickerOpen ? (
-              <HighlightSchemaPicker
-                selectedIndex={hlPickerIndex}
-                height={contentHeight}
-                width={filePaneWidth}
-                theme={theme}
-                activeSchemaId={hlPickerSavedId}
-              />
-            ) : (
-              <>
-                <RepoBar name={repoName} width={filePaneWidth} theme={theme} />
-                <FileList
-                  rows={visibleFileRows}
-                  selectedRowIndex={fileRowIndex}
-                  scrollOffset={fileScroll}
-                  height={fileListHeight}
+          {filePaneWidth > 0 ? (
+            <Box flexDirection="column" width={filePaneWidth} height={contentHeight}>
+              {themeMenuOpen ? (
+                <ThemeMenu
+                  selectedIndex={themeMenuIndex}
+                  height={contentHeight}
                   width={filePaneWidth}
                   theme={theme}
-                  dirsWithChanges={dirsWithChanges}
+                  bgLabel={findDiffBgPalette(diffBgPaletteId).label}
+                  syntaxLabel={findHighlightSchema(highlightSchemaId).label}
                 />
-                <FileSummary
-                  summary={changeSummary}
+              ) : bgPickerOpen ? (
+                <DiffBgPicker
+                  selectedIndex={bgPickerIndex}
+                  height={contentHeight}
                   width={filePaneWidth}
                   theme={theme}
-                  maxTypeRows={summaryTypeRows}
+                  activePaletteId={bgPickerSavedId}
                 />
-              </>
-            )}
-          </Box>
+              ) : hlPickerOpen ? (
+                <HighlightSchemaPicker
+                  selectedIndex={hlPickerIndex}
+                  height={contentHeight}
+                  width={filePaneWidth}
+                  theme={theme}
+                  activeSchemaId={hlPickerSavedId}
+                />
+              ) : (
+                <>
+                  <RepoBar name={repoName} width={filePaneWidth} theme={theme} />
+                  <FileList
+                    rows={visibleFileRows}
+                    selectedRowIndex={fileRowIndex}
+                    scrollOffset={fileScroll}
+                    height={fileListHeight}
+                    width={filePaneWidth}
+                    theme={theme}
+                    dirsWithChanges={dirsWithChanges}
+                  />
+                  <FileSummary
+                    summary={changeSummary}
+                    width={filePaneWidth}
+                    theme={theme}
+                    maxTypeRows={summaryTypeRows}
+                  />
+                </>
+              )}
+            </Box>
+          ) : null}
           <Box flexDirection="column" width={diffPaneWidth} height={contentHeight}>
             <TabBar
               tabs={fileTabs.tabs}

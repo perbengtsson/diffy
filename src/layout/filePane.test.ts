@@ -6,6 +6,7 @@ import {
   clampFilePaneWidth,
   defaultFilePaneWidth,
   isSplitBorderHit,
+  resolveFilePaneWidth,
 } from './filePane.js';
 
 describe('clampFilePaneWidth', () => {
@@ -33,6 +34,42 @@ describe('defaultFilePaneWidth', () => {
   it('always leaves room for the diff pane', () => {
     const width = defaultFilePaneWidth(60, false);
     assert.ok(width + MIN_DIFF_PANE_WIDTH <= 60);
+  });
+});
+
+describe('resolveFilePaneWidth', () => {
+  it('returns 0 when collapsed and no left picker', () => {
+    assert.equal(
+      resolveFilePaneWidth({
+        columns: 120,
+        collapsed: true,
+        leftPickerOpen: false,
+        userWidth: 40,
+      }),
+      0,
+    );
+  });
+
+  it('keeps the picker width when collapsed but picker is open', () => {
+    const width = resolveFilePaneWidth({
+      columns: 120,
+      collapsed: true,
+      leftPickerOpen: true,
+      userWidth: 40,
+    });
+    assert.equal(width, defaultFilePaneWidth(120, true));
+  });
+
+  it('uses the user width when expanded', () => {
+    assert.equal(
+      resolveFilePaneWidth({
+        columns: 120,
+        collapsed: false,
+        leftPickerOpen: false,
+        userWidth: 42,
+      }),
+      42,
+    );
   });
 });
 

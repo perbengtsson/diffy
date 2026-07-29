@@ -23,6 +23,25 @@ export function clampFilePaneWidth(width: number, columns: number): number {
 }
 
 /**
+ * Effective file-pane width. Collapsed hides the pane (width 0) unless a left
+ * picker (themes) needs it.
+ */
+export function resolveFilePaneWidth(options: {
+  columns: number;
+  collapsed: boolean;
+  leftPickerOpen: boolean;
+  userWidth: number | null;
+}): number {
+  const { columns, collapsed, leftPickerOpen, userWidth } = options;
+  if (collapsed && !leftPickerOpen) return 0;
+  if (leftPickerOpen) return defaultFilePaneWidth(columns, true);
+  return clampFilePaneWidth(
+    userWidth ?? defaultFilePaneWidth(columns, false),
+    columns,
+  );
+}
+
+/**
  * True when (x, y) is on the vertical split between file and diff panes.
  * Coordinates are 1-based SGR mouse cells; the border is the last column of
  * the file pane (`x === filePaneWidth`).
