@@ -47,6 +47,7 @@ Arrow navigation in the file list opens a dim **preview** tab (leftmost) until t
 ### Find & go to line
 
 - `f` — find in the current file; Tab toggles **all files**; `↑` / `↓` cycle matches; Esc closes.
+  Double-click a word in the diff to open Find with that word (or replace the query if Find is already open).
 - `g` — jump to a source line number in the open file.
 - `j` / `k` or `Shift+↓` / `Shift+↑` — jump to the next/previous change block (across files).
 
@@ -75,6 +76,7 @@ In the menu: `↑` / `↓` select, Enter opens, `b` / `h` jump to background / s
 | Double-click file or preview tab | Pin tab |
 | Click directory | Fold / unfold |
 | Click diff line | Move cursor |
+| Double-click word in diff | Find that word (replaces query if Find is open) |
 | Click tab / tab × | Activate / close |
 | Wheel | Scroll files or diff |
 | Drag scrollbar | Scroll diff |

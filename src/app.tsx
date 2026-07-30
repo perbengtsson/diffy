@@ -4,7 +4,7 @@ import { basename, join } from 'node:path';
 import { Box, useApp, useInput, useStdin, useStdout } from 'ink';
 import { FileList } from './components/FileList.js';
 import { FileSummary, fileSummaryHeight } from './components/FileSummary.js';
-import { DiffView } from './components/DiffView.js';
+import { DiffView, DIFF_GUTTER_WIDTH } from './components/DiffView.js';
 import { SearchBar } from './components/SearchBar.js';
 import { CommentBar } from './components/CommentBar.js';
 import { GoToLineBar } from './components/GoToLineBar.js';
@@ -54,6 +54,7 @@ import {
 import { buildDisplayLines } from './diff/expand.js';
 import { findDisplayLineIndexByNumber } from './diff/goToLine.js';
 import type { DisplayLine } from './diff/types.js';
+import { wordAtColumn } from './diff/wordAt.js';
 import {
   buildLineHighlightCache,
   type LineHighlightCache,
@@ -97,13 +98,23 @@ import {
   rememberTabView,
   type TabViewState,
 } from './files/tabView.js';
-import { scrollOffsetFromTrackRow, isScrollBarHit, centeredScrollOffset } from './components/scrollBar.js';
+import {
+  scrollOffsetFromTrackRow,
+  isScrollBarHit,
+  centeredScrollOffset,
+  needsScrollBar,
+  scrollBarChromeWidth,
+} from './components/scrollBar.js';
 import {
   clampFilePaneWidth,
   isSplitBorderHit,
   resolveFilePaneWidth,
 } from './layout/filePane.js';
-import { findAllFileMatches, findLineMatches } from './search/search.js';
+import {
+  findAllFileMatches,
+  findLineMatches,
+  isSearchableLine,
+} from './search/search.js';
 import type { SearchMatch, SearchScope } from './search/types.js';
 
 type Focus = 'files' | 'diff';
@@ -1047,6 +1058,32 @@ export function App({
     [fileTabs.preview, visibleFileRows],
   );
 
+  const openSearch = useCallback((scope: SearchScope, query = '') => {
+    setSearchScope(scope);
+    setSearchOpen(true);
+    setSearchQuery(query);
+    setSearchMatchIndex(0);
+    setAllSearchMatches([]);
+    setGoToLineOpen(false);
+    setCommentOpen(false);
+    setThemeMenuOpen(false);
+    setBgPickerOpen(false);
+    setHlPickerOpen(false);
+    setFocus('diff');
+  }, []);
+
+  const searchWord = useCallback(
+    (word: string) => {
+      if (searchOpen) {
+        setSearchQuery(word);
+        setSearchMatchIndex(0);
+        return;
+      }
+      openSearch('file', word);
+    },
+    [openSearch, searchOpen],
+  );
+
   const handleMouseEvent = useCallback(
     (event: MouseEvent) => {
       if (editorOpenRef.current) return;
@@ -1177,6 +1214,37 @@ export function App({
         const lineIndex = event.y - 1 - tabBarHeight + diffScroll;
         if (lineIndex < 0 || lineIndex >= displayLines.length) return;
         setCursorLine(lineIndex);
+
+        const line = displayLines[lineIndex];
+        if (!line || !isSearchableLine(line)) return;
+
+        const paneX = event.x - filePaneWidth - 1;
+        const chrome = scrollBarChromeWidth(
+          needsScrollBar(displayLines.length, diffHeight),
+        );
+        const linesWidth = Math.max(10, diffPaneWidth - chrome);
+        const contentWidth = Math.max(10, linesWidth - DIFF_GUTTER_WIDTH);
+        const contentCol = paneX - DIFF_GUTTER_WIDTH;
+        if (contentCol < 0 || contentCol >= contentWidth) return;
+        if (
+          line.content.length > contentWidth &&
+          contentCol >= contentWidth - 1
+        ) {
+          return;
+        }
+
+        const hit = wordAtColumn(line.content, contentCol);
+        if (!hit) return;
+
+        const { state, isDouble } = registerClick(
+          doubleClickRef.current,
+          `word:${lineIndex}:${hit.start}`,
+          Date.now(),
+        );
+        doubleClickRef.current = state;
+        if (isDouble) {
+          searchWord(hit.word);
+        }
         return;
       }
 
@@ -1220,7 +1288,7 @@ export function App({
       diffHeight,
       diffPaneWidth,
       diffScroll,
-      displayLines.length,
+      displayLines,
       fileHeaderHeight,
       fileListHeight,
       filePaneWidth,
@@ -1234,6 +1302,7 @@ export function App({
       maxFileScroll,
       overviewOpen,
       scrollBarLayout,
+      searchWord,
       selectFileRow,
       tabBarHeight,
       visibleFileRows,
@@ -1241,20 +1310,6 @@ export function App({
   );
 
   useMouse(handleMouseEvent);
-
-  const openSearch = useCallback((scope: SearchScope) => {
-    setSearchScope(scope);
-    setSearchOpen(true);
-    setSearchQuery('');
-    setSearchMatchIndex(0);
-    setAllSearchMatches([]);
-    setGoToLineOpen(false);
-    setCommentOpen(false);
-    setThemeMenuOpen(false);
-    setBgPickerOpen(false);
-    setHlPickerOpen(false);
-    setFocus('diff');
-  }, []);
 
   const closeSearch = useCallback(() => {
     setSearchOpen(false);

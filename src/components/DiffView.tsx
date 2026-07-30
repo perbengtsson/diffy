@@ -36,8 +36,9 @@ type Props = {
   emptyMessage?: string;
 };
 
-/** old(4) + new(4) + separator(1) */
-const GUTTER_WIDTH = 9;
+/** old(4) + new(4) + separator(1) — exported for mouse hit-testing. */
+export const DIFF_GUTTER_WIDTH = 9;
+const GUTTER_WIDTH = DIFF_GUTTER_WIDTH;
 type SearchHighlightStyle = { bg: string; fg: string };
 
 const SEARCH_MATCH: SearchHighlightStyle = { bg: 'yellow', fg: 'black' };
