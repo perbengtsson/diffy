@@ -175,7 +175,7 @@ export function App({
   const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(() =>
     buildInitialCollapsedDirs(initialSnapshot.files),
   );
-  const [showUnedited, setShowUnedited] = useState(false);
+  const [showUnedited, setShowUnedited] = useState(true);
   const [fileScroll, setFileScroll] = useState(0);
   const [diffScroll, setDiffScroll] = useState(0);
   const [cursorLine, setCursorLine] = useState(0);
