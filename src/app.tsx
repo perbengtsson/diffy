@@ -748,15 +748,17 @@ export function App({
 
   const quitApp = useCallback(() => {
     const session = reviewSessionRef.current;
+    // Publish review payload before async persist/exit so clipboard copy
+    // still runs if unmount races ahead of the finally callback.
+    onQuitReviewRef.current?.({
+      terminal: formatReviewTerminal(session),
+      plain: compileReview(session),
+    });
     void persistSession(reviewPathRef.current, session)
       .catch(() => {
         /* best-effort; still quit */
       })
       .finally(() => {
-        onQuitReviewRef.current?.({
-          terminal: formatReviewTerminal(session),
-          plain: compileReview(session),
-        });
         exit();
       });
   }, [exit]);
@@ -992,16 +994,19 @@ export function App({
       setCommentOpen(false);
       return;
     }
-    setReviewSession((session) =>
-      upsertComment(session, {
+    setReviewSession((session) => {
+      const next = upsertComment(session, {
         path: selectedFile.path,
         side: target.side,
         line: target.line,
         body: commentDraft,
         snippet: target.snippet,
         otherLine: target.otherLine,
-      }),
-    );
+      });
+      // Eager ref update so quit before re-render still sees the new comment.
+      reviewSessionRef.current = next;
+      return next;
+    });
     setCommentOpen(false);
     setCommentDraft('');
   }, [commentDraft, cursorLine, displayLines, selectedFile]);
@@ -1334,6 +1339,12 @@ export function App({
     if (editorOpenRef.current) return;
     if (input.startsWith('\x1b[<')) return;
 
+    // Always quit on Ctrl+C (exitOnCtrlC is disabled so we own this).
+    if (key.ctrl && input === 'c') {
+      quitApp();
+      return;
+    }
+
     if (commentOpen) {
       if (key.escape) {
         setCommentOpen(false);
@@ -1381,7 +1392,7 @@ export function App({
         setOverviewOpen(false);
         return;
       }
-      if (input === 'q' || (key.ctrl && input === 'c')) {
+      if (input === 'q') {
         quitApp();
         return;
       }
@@ -1526,7 +1537,7 @@ export function App({
       return;
     }
 
-    if (input === 'q' || (key.ctrl && input === 'c')) {
+    if (input === 'q') {
       quitApp();
       return;
     }
