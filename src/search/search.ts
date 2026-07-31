@@ -33,6 +33,17 @@ export function findLineMatches(
   return matches;
 }
 
+/** Index of the match at `filePath`/`lineIndex`, or -1. */
+export function findMatchIndex(
+  matches: readonly SearchMatch[],
+  filePath: string,
+  lineIndex: number,
+): number {
+  return matches.findIndex(
+    (match) => match.filePath === filePath && match.lineIndex === lineIndex,
+  );
+}
+
 export async function findAllFileMatches(
   files: DiffFile[],
   mode: DiffMode,

@@ -114,6 +114,7 @@ import {
 import {
   findAllFileMatches,
   findLineMatches,
+  findMatchIndex,
   isSearchableLine,
 } from './search/search.js';
 import type { SearchMatch, SearchScope } from './search/types.js';
@@ -206,6 +207,10 @@ export function App({
   const [screenEpoch, setScreenEpoch] = useState(0);
 
   const pendingSearchMatchRef = useRef<SearchMatch | null>(null);
+  /** Prefer this match after a word-click search instead of jumping to index 0. */
+  const pendingSearchAnchorRef = useRef<SearchMatch | null>(null);
+  /** Query that `allSearchMatches` was computed for (avoids anchoring to stale hits). */
+  const allSearchMatchesQueryRef = useRef<string | null>(null);
   const pendingReviewJumpRef = useRef<ReviewComment | null>(null);
   const pendingChangeJumpRef = useRef<ChangeLocation | null>(null);
   const changeNavBusyRef = useRef(false);
@@ -227,6 +232,7 @@ export function App({
   const prevActivePathRef = useRef<string | null>(null);
   const viewStateRef = useRef({ cursorLine, diffScroll });
   viewStateRef.current = { cursorLine, diffScroll };
+  const selectedPathRef = useRef<string | undefined>(undefined);
 
   const initialPath =
     initialSnapshot.files[findFirstEditedIndex(initialSnapshot.files)]?.path;
@@ -296,6 +302,7 @@ export function App({
   const selectedFile = fileTabs.activePath
     ? snapshot.files.find((f) => f.path === fileTabs.activePath)
     : undefined;
+  selectedPathRef.current = selectedFile?.path;
 
   const sortedReviewComments = useMemo(() => {
     return [...reviewSession.comments].sort((a, b) => {
@@ -542,6 +549,7 @@ export function App({
 
   useEffect(() => {
     if (!searchOpen || searchScope !== 'all' || !searchQuery) {
+      allSearchMatchesQueryRef.current = null;
       setAllSearchMatches([]);
       setAllSearchLoading(false);
       return;
@@ -557,12 +565,14 @@ export function App({
     )
       .then((matches) => {
         if (!cancelled) {
+          allSearchMatchesQueryRef.current = searchQuery;
           setAllSearchMatches(matches);
           setAllSearchLoading(false);
         }
       })
       .catch(() => {
         if (!cancelled) {
+          allSearchMatchesQueryRef.current = searchQuery;
           setAllSearchMatches([]);
           setAllSearchLoading(false);
         }
@@ -581,6 +591,9 @@ export function App({
   ]);
 
   useEffect(() => {
+    // Word-click sets an anchor; resolve it once matches are ready instead of
+    // always resetting to the first hit.
+    if (pendingSearchAnchorRef.current) return;
     setSearchMatchIndex(0);
   }, [searchQuery, searchScope]);
 
@@ -1031,10 +1044,41 @@ export function App({
   // Jump only when search navigation state changes — not when the open file
   // changes (mouse/tab file picks while Find is open must stick).
   useEffect(() => {
-    if (!searchOpen || !searchQuery || searchMatches.length === 0) return;
+    if (!searchOpen || !searchQuery) return;
     if (searchScope === 'all' && allSearchLoading) return;
     if (pendingSearchMatchRef.current) return;
-    goToSearchMatchRef.current(searchMatches[searchMatchIndex]);
+
+    const anchor = pendingSearchAnchorRef.current;
+    if (anchor) {
+      // All-files hits can lag a frame behind the query; wait until they match.
+      if (
+        searchScope === 'all' &&
+        allSearchMatchesQueryRef.current !== searchQuery
+      ) {
+        return;
+      }
+      const index = findMatchIndex(
+        searchMatches,
+        anchor.filePath,
+        anchor.lineIndex,
+      );
+      pendingSearchAnchorRef.current = null;
+      setSearchMatchIndex(index >= 0 ? index : 0);
+      // Word-click: stay on the clicked occurrence (already under the cursor).
+      return;
+    }
+
+    if (searchMatches.length === 0) return;
+    const match = searchMatches[searchMatchIndex];
+    if (!match) return;
+    // Index landed on the line we're already viewing — don't re-center.
+    if (
+      match.filePath === selectedPathRef.current &&
+      match.lineIndex === viewStateRef.current.cursorLine
+    ) {
+      return;
+    }
+    goToSearchMatchRef.current(match);
   }, [
     allSearchLoading,
     searchMatchIndex,
@@ -1080,10 +1124,10 @@ export function App({
   }, []);
 
   const searchWord = useCallback(
-    (word: string) => {
+    (word: string, anchor?: SearchMatch) => {
+      if (anchor) pendingSearchAnchorRef.current = anchor;
       if (searchOpen) {
         setSearchQuery(word);
-        setSearchMatchIndex(0);
         return;
       }
       openSearch('file', word);
@@ -1266,7 +1310,14 @@ export function App({
         );
         doubleClickRef.current = state;
         if (isDouble) {
-          searchWord(hit.word);
+          if (selectedFile) {
+            searchWord(hit.word, {
+              filePath: selectedFile.path,
+              lineIndex,
+            });
+          } else {
+            searchWord(hit.word);
+          }
         }
         return;
       }
@@ -1326,6 +1377,7 @@ export function App({
       overviewOpen,
       scrollBarLayout,
       searchWord,
+      selectedFile,
       selectFileRow,
       tabBarHeight,
       visibleFileRows,
@@ -1340,6 +1392,8 @@ export function App({
     setSearchMatchIndex(0);
     setAllSearchMatches([]);
     pendingSearchMatchRef.current = null;
+    pendingSearchAnchorRef.current = null;
+    allSearchMatchesQueryRef.current = null;
   }, []);
 
   const stepSearchMatch = useCallback(
