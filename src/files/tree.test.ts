@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { DiffFile } from '../git/types.js';
 import {
+  buildAncestorDirs,
   buildFileTree,
   buildInitialCollapsedDirs,
   flattenFilesInTreeOrder,
@@ -18,6 +19,13 @@ function file(path: string, status: DiffFile['status'] = 'modified'): DiffFile {
     isBinary: false,
   };
 }
+
+describe('buildAncestorDirs', () => {
+  it('collects parent directories for each path', () => {
+    const dirs = buildAncestorDirs(['src/a.ts', 'src/nested/b.ts', 'root.ts']);
+    assert.deepEqual([...dirs].sort(), ['src', 'src/nested']);
+  });
+});
 
 describe('flattenFilesInTreeOrder', () => {
   it('matches dirs-first tree order, not flat path sort', () => {

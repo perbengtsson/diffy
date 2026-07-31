@@ -76,6 +76,7 @@ import { workingTreeLineForEdit } from './editor/editorCommand.js';
 import { runExternalEditor } from './editor/runExternalEditor.js';
 import {
   buildFileTree,
+  buildAncestorDirs,
   buildDirsWithChanges,
   buildInitialCollapsedDirs,
   findFirstEditedIndex,
@@ -514,24 +515,22 @@ export function App({
   const searchMatches =
     searchScope === 'file' ? fileSearchMatches : allSearchMatches;
 
+  // Always derive from the open file's display lines so match wash stays
+  // correct while all-files search is still loading / after expand changes.
   const currentFileSearchLines = useMemo(() => {
     if (!searchOpen || !searchQuery || !selectedFile) return undefined;
-    if (searchScope === 'all') {
-      return new Set(
-        allSearchMatches
-          .filter((match) => match.filePath === selectedFile.path)
-          .map((match) => match.lineIndex),
-      );
-    }
     return new Set(fileSearchMatches.map((match) => match.lineIndex));
-  }, [
-    allSearchMatches,
-    fileSearchMatches,
-    searchOpen,
-    searchQuery,
-    searchScope,
-    selectedFile,
-  ]);
+  }, [fileSearchMatches, searchOpen, searchQuery, selectedFile]);
+
+  const searchHitPaths = useMemo(() => {
+    if (!searchOpen || searchScope !== 'all' || !searchQuery) return undefined;
+    return new Set(allSearchMatches.map((match) => match.filePath));
+  }, [allSearchMatches, searchOpen, searchQuery, searchScope]);
+
+  const dirsWithSearchHits = useMemo(
+    () => (searchHitPaths ? buildAncestorDirs(searchHitPaths) : undefined),
+    [searchHitPaths],
+  );
 
   const activeSearchLine =
     searchOpen &&
@@ -620,6 +619,8 @@ export function App({
     },
     [fileTabs.pin, scrollToLine, selectedFile?.path, snapshot.files],
   );
+  const goToSearchMatchRef = useRef(goToSearchMatch);
+  goToSearchMatchRef.current = goToSearchMatch;
 
   const goToChangeLocation = useCallback(
     (location: ChangeLocation | null) => {
@@ -1027,14 +1028,15 @@ export function App({
     scrollToLine(pending.lineIndex);
   }, [displayLines, loadingDiff, scrollToLine, selectedFile?.path]);
 
+  // Jump only when search navigation state changes — not when the open file
+  // changes (mouse/tab file picks while Find is open must stick).
   useEffect(() => {
     if (!searchOpen || !searchQuery || searchMatches.length === 0) return;
     if (searchScope === 'all' && allSearchLoading) return;
     if (pendingSearchMatchRef.current) return;
-    goToSearchMatch(searchMatches[searchMatchIndex]);
+    goToSearchMatchRef.current(searchMatches[searchMatchIndex]);
   }, [
     allSearchLoading,
-    goToSearchMatch,
     searchMatchIndex,
     searchMatches,
     searchOpen,
@@ -1795,6 +1797,8 @@ export function App({
                     width={filePaneWidth}
                     theme={theme}
                     dirsWithChanges={dirsWithChanges}
+                    searchHitPaths={searchHitPaths}
+                    dirsWithSearchHits={dirsWithSearchHits}
                   />
                   <FileSummary
                     summary={changeSummary}

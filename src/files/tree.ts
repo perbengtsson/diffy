@@ -73,11 +73,11 @@ function sortTree(nodes: FileTreeNode[]): void {
   }
 }
 
-export function buildDirsWithChanges(files: DiffFile[]): Set<string> {
+/** Ancestor directory paths for the given file paths (e.g. a/b/c.ts → a, a/b). */
+export function buildAncestorDirs(filePaths: Iterable<string>): Set<string> {
   const dirs = new Set<string>();
-  for (const file of files) {
-    if (!isEditedFile(file)) continue;
-    const parts = file.path.split('/');
+  for (const filePath of filePaths) {
+    const parts = filePath.split('/');
     let path = '';
     for (let i = 0; i < parts.length - 1; i++) {
       path = path ? `${path}/${parts[i]}` : parts[i]!;
@@ -85,6 +85,12 @@ export function buildDirsWithChanges(files: DiffFile[]): Set<string> {
     }
   }
   return dirs;
+}
+
+export function buildDirsWithChanges(files: DiffFile[]): Set<string> {
+  return buildAncestorDirs(
+    files.filter(isEditedFile).map((file) => file.path),
+  );
 }
 
 export function buildInitialCollapsedDirs(files: DiffFile[]): Set<string> {
