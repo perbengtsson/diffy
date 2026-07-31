@@ -15,7 +15,7 @@ import {
   THEME_MENU_ITEMS,
   ThemeMenu,
 } from './components/ThemeMenu.js';
-import { RepoBar } from './components/RepoBar.js';
+import { RepoBar, hitTestRepoMode } from './components/RepoBar.js';
 import { StatusBar } from './components/StatusBar.js';
 import { TabBar, layoutTabBar, hitTestTab } from './components/TabBar.js';
 import {
@@ -1175,6 +1175,22 @@ export function App({
       }
 
       if (
+        !overviewOpen &&
+        !leftPickerOpen &&
+        filePaneWidth > 0 &&
+        event.x >= 1 &&
+        event.x <= filePaneWidth &&
+        event.y === 1
+      ) {
+        if (hitTestRepoMode(filePaneWidth, event.x - 1)) {
+          setShowUnedited((show) => !show);
+          syncFileRowToActiveRef.current = true;
+          setFocus('files');
+        }
+        return;
+      }
+
+      if (
         event.x > filePaneWidth &&
         event.x <= filePaneWidth + diffPaneWidth &&
         event.y === 1
@@ -1601,6 +1617,12 @@ export function App({
       return;
     }
 
+    if (input === 'd') {
+      setShowUnedited((show) => !show);
+      syncFileRowToActiveRef.current = true;
+      return;
+    }
+
     if ((key.shift && key.downArrow) || input === 'j') {
       jumpChangeBlock(1);
       return;
@@ -1612,12 +1634,6 @@ export function App({
 
     if (focus === 'files') {
       const currentRow = visibleFileRows[fileRowIndex];
-
-      if (input === 'd') {
-        setShowUnedited((show) => !show);
-        syncFileRowToActiveRef.current = true;
-        return;
-      }
 
       const selectRow = (nextRow: number, openDiff = false) => {
         selectFileRow(nextRow, openDiff);
@@ -1765,7 +1781,12 @@ export function App({
                 />
               ) : (
                 <>
-                  <RepoBar name={repoName} width={filePaneWidth} theme={theme} />
+                  <RepoBar
+                    name={repoName}
+                    width={filePaneWidth}
+                    theme={theme}
+                    showUnedited={showUnedited}
+                  />
                   <FileList
                     rows={visibleFileRows}
                     selectedRowIndex={fileRowIndex}
