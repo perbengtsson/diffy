@@ -31,7 +31,7 @@ diffy --resume review-main-2026-07-18-1024
 ### Layout
 
 - **Files pane** — repo name, change summary (`+/-` totals by file type), and a tree. By default the tree includes unchanged files; press `d` for diffs-only.
-- **Diff pane** — tab bar + full-file unified view (not hunk-only): unchanged lines filled in around changes, with add/delete coloring and syntax highlighting.
+- **Diff pane** — tab bar + full-file unified view (not hunk-only): unchanged lines filled in around changes, with add/delete coloring and syntax highlighting. Long lines soft-wrap within the pane.
 - **Status bar** — mode label, watch indicator (`●` idle / `⟳` refreshing), and contextual key hints.
 
 Drag the vertical split to resize panes. Collapse the files pane with `h`.

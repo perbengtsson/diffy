@@ -7,19 +7,24 @@ import {
   DEFAULT_HIGHLIGHT_SCHEMA_ID,
 } from '../highlight/colors.js';
 import type { HighlightToken } from '../highlight/tokens.js';
-import { truncateTokens } from '../highlight/tokens.js';
 import type { DisplayLine, DisplayLineKind } from '../diff/types.js';
-import type { Theme } from '../theme.js';
 import {
-  SCROLLBAR_GAP,
-  needsScrollBar,
-  scrollBarChromeWidth,
-} from './scrollBar.js';
+  DIFF_GUTTER_WIDTH,
+  logicalLineAtVisualRow,
+  resolveDiffWrapLayout,
+  visualRowRangeForLine,
+  wrapSegmentOffset,
+} from '../diff/wrap.js';
+import type { Theme } from '../theme.js';
+import { SCROLLBAR_GAP } from './scrollBar.js';
 import { DiffScrollBar } from './DiffScrollBar.js';
 import { displayLineCommentKey } from '../review/store.js';
 
+export { DIFF_GUTTER_WIDTH };
+
 type Props = {
   lines: DisplayLine[];
+  /** Visual-row scroll offset (accounts for soft-wrapped lines). */
   scrollOffset: number;
   cursorLine: number;
   height: number;
@@ -36,9 +41,6 @@ type Props = {
   emptyMessage?: string;
 };
 
-/** old(4) + new(4) + separator(1) — exported for mouse hit-testing. */
-export const DIFF_GUTTER_WIDTH = 9;
-const GUTTER_WIDTH = DIFF_GUTTER_WIDTH;
 type SearchHighlightStyle = { bg: string; fg: string };
 
 const SEARCH_MATCH: SearchHighlightStyle = { bg: 'yellow', fg: 'black' };
@@ -76,31 +78,6 @@ function diffBackground(line: DisplayLine, theme: Theme): string | undefined {
   if (line.kind === 'add') return theme.addedBg;
   if (line.kind === 'delete') return theme.removedBg;
   return undefined;
-}
-
-function usedContentWidth(
-  line: DisplayLine,
-  highlightCache: LineHighlightCache | undefined,
-  contentWidth: number,
-): number {
-  const tokens = tokensForLine(line, highlightCache);
-  if (tokens) {
-    let remaining = contentWidth;
-    let used = 0;
-    for (const token of tokens) {
-      if (remaining <= 0) break;
-      if (token.text.length <= remaining) {
-        used += token.text.length;
-        remaining -= token.text.length;
-        continue;
-      }
-      return remaining === 1 ? used + 1 : used + remaining;
-    }
-    return used;
-  }
-
-  const text = line.content;
-  return text.length > contentWidth ? contentWidth : text.length;
 }
 
 function renderLinePadding(
@@ -193,15 +170,46 @@ function applySearchHighlight(
 function prepareTokens(
   tokens: HighlightToken[],
   schemaId: string,
-  contentWidth: number,
   searchQuery: string | undefined,
   searchHighlight: SearchHighlightStyle | undefined,
 ): RenderToken[] {
-  const colored = colorizeTokens(truncateTokens(tokens, contentWidth), schemaId);
+  const colored = colorizeTokens(tokens, schemaId);
   if (searchHighlight && searchQuery) {
     return applySearchHighlight(colored, searchQuery, searchHighlight);
   }
   return colored;
+}
+
+function sliceRenderTokens(
+  tokens: RenderToken[],
+  start: number,
+  length: number,
+): RenderToken[] {
+  if (length <= 0) return [];
+  const end = start + length;
+  let pos = 0;
+  const out: RenderToken[] = [];
+
+  for (const token of tokens) {
+    const tokenEnd = pos + token.text.length;
+    if (tokenEnd <= start) {
+      pos = tokenEnd;
+      continue;
+    }
+    if (pos >= end) break;
+    const sliceStart = Math.max(0, start - pos);
+    const sliceEnd = Math.min(token.text.length, end - pos);
+    if (sliceStart < sliceEnd) {
+      out.push({
+        text: token.text.slice(sliceStart, sliceEnd),
+        color: token.color,
+        backgroundColor: token.backgroundColor,
+      });
+    }
+    pos = tokenEnd;
+  }
+
+  return out;
 }
 
 function renderGutter(
@@ -210,8 +218,16 @@ function renderGutter(
   bold: boolean,
   highlight?: SearchHighlightStyle,
   hasComment?: boolean,
+  showLineNumbers = true,
 ) {
   const backgroundColor = highlight?.bg;
+  if (!showLineNumbers) {
+    return (
+      <Text backgroundColor={backgroundColor}>
+        {' '.repeat(DIFF_GUTTER_WIDTH)}
+      </Text>
+    );
+  }
   return (
     <>
       <Text
@@ -317,54 +333,56 @@ function renderLineContent(
   line: DisplayLine,
   theme: Theme,
   contentWidth: number,
+  wrapRow: number,
   highlightCache: LineHighlightCache | undefined,
   highlightSchemaId: string,
   searchQuery: string | undefined,
   searchHighlight?: 'match' | 'active',
 ) {
+  const offset = wrapSegmentOffset(wrapRow, contentWidth);
+  const segment = line.content.slice(offset, offset + contentWidth);
+  const usedWidth = segment.length;
   const tokens = tokensForLine(line, highlightCache);
   const bold = !isUneditedLine(line.kind);
   const highlight = searchStyle(searchHighlight);
   const diffBg = diffBackground(line, theme);
-  const usedWidth = usedContentWidth(line, highlightCache, contentWidth);
 
   if (tokens) {
-    const prepared = prepareTokens(
-      tokens,
-      highlightSchemaId,
+    const prepared = sliceRenderTokens(
+      prepareTokens(tokens, highlightSchemaId, searchQuery, highlight),
+      offset,
       contentWidth,
-      searchQuery,
-      highlight,
     );
+    // Keep empty wrap rows from collapsing in Ink.
+    const body =
+      prepared.length > 0
+        ? prepared
+        : [{ text: '', color: undefined as string | undefined }];
     switch (line.kind) {
       case 'add':
         return (
           <>
-            {renderTokens(prepared, { bold, backgroundColor: diffBg })}
+            {renderTokens(body, { bold, backgroundColor: diffBg })}
             {renderLinePadding(usedWidth, contentWidth, diffBg)}
           </>
         );
       case 'delete':
         return (
           <>
-            {renderTokens(prepared, { bold, backgroundColor: diffBg })}
+            {renderTokens(body, { bold, backgroundColor: diffBg })}
             {renderLinePadding(usedWidth, contentWidth, diffBg)}
           </>
         );
       case 'context':
-        return renderTokens(prepared, { defaultColor: theme.contextFg });
+        return renderTokens(body, { defaultColor: theme.contextFg });
     }
   }
-
-  const text = line.content.length > contentWidth
-    ? line.content.slice(0, contentWidth - 1) + '…'
-    : line.content;
 
   switch (line.kind) {
     case 'add':
       return (
         <>
-          {renderTextWithSearch(text, searchQuery ?? '', highlight, {
+          {renderTextWithSearch(segment, searchQuery ?? '', highlight, {
             bold,
             backgroundColor: diffBg,
           })}
@@ -374,7 +392,7 @@ function renderLineContent(
     case 'delete':
       return (
         <>
-          {renderTextWithSearch(text, searchQuery ?? '', highlight, {
+          {renderTextWithSearch(segment, searchQuery ?? '', highlight, {
             bold,
             backgroundColor: diffBg,
           })}
@@ -384,23 +402,23 @@ function renderLineContent(
     case 'hunk-header':
       return (
         <Text bold color={theme.hunkHeaderFg}>
-          {line.content}
+          {segment}
         </Text>
       );
     case 'file-header':
       return (
         <Text bold color={theme.dimFg}>
-          {line.content}
+          {segment}
         </Text>
       );
     case 'binary':
       return (
         <Text bold color={theme.dimFg}>
-          {line.content}
+          {segment}
         </Text>
       );
     default:
-      return renderTextWithSearch(text, searchQuery ?? '', highlight, {
+      return renderTextWithSearch(segment, searchQuery ?? '', highlight, {
         color: theme.contextFg,
       });
   }
@@ -423,11 +441,33 @@ export function DiffView({
   emptyMessage = 'Select a file to view its diff',
 }: Props) {
   const innerHeight = Math.max(1, height);
-  const showScrollBar = needsScrollBar(lines.length, innerHeight);
-  const chromeWidth = scrollBarChromeWidth(showScrollBar);
-  const linesWidth = Math.max(10, width - chromeWidth);
-  const contentWidth = Math.max(10, linesWidth - GUTTER_WIDTH);
-  const visible = lines.slice(scrollOffset, scrollOffset + innerHeight);
+  const layout = resolveDiffWrapLayout(lines, width, innerHeight);
+  const { contentWidth, linesWidth, showScrollBar, totalRows } = layout;
+
+  const visible: {
+    visualRow: number;
+    lineIndex: number;
+    wrapRow: number;
+    line: DisplayLine;
+  }[] = [];
+
+  for (
+    let visualRow = scrollOffset;
+    visualRow < scrollOffset + innerHeight && visualRow < totalRows;
+    visualRow++
+  ) {
+    const lineIndex = logicalLineAtVisualRow(layout, visualRow);
+    if (lineIndex < 0) break;
+    const line = lines[lineIndex];
+    if (!line) break;
+    const { start } = visualRowRangeForLine(layout, lineIndex);
+    visible.push({
+      visualRow,
+      lineIndex,
+      wrapRow: visualRow - start,
+      line,
+    });
+  }
 
   return (
     <Box flexDirection="column" width={width} height={height} flexGrow={1}>
@@ -438,11 +478,10 @@ export function DiffView({
       ) : (
         <Box flexDirection="row" width={width} height={innerHeight}>
           <Box flexDirection="column" width={linesWidth}>
-            {visible.map((line, i) => {
-              const absoluteIndex = scrollOffset + i;
-              const atCursor = focused && absoluteIndex === cursorLine;
-              const isSearchMatch = searchMatchLines?.has(absoluteIndex) ?? false;
-              const isActiveSearch = activeSearchLine === absoluteIndex;
+            {visible.map(({ visualRow, lineIndex, wrapRow, line }) => {
+              const atCursor = focused && lineIndex === cursorLine;
+              const isSearchMatch = searchMatchLines?.has(lineIndex) ?? false;
+              const isActiveSearch = activeSearchLine === lineIndex;
               const searchHighlight = isActiveSearch
                 ? 'active'
                 : isSearchMatch
@@ -452,9 +491,11 @@ export function DiffView({
               const bold = !isUneditedLine(line.kind);
               const commentKey = displayLineCommentKey(line);
               const hasComment =
-                commentKey !== null && (commentedKeys?.has(commentKey) ?? false);
+                wrapRow === 0 &&
+                commentKey !== null &&
+                (commentedKeys?.has(commentKey) ?? false);
               return (
-                <Box key={absoluteIndex}>
+                <Box key={visualRow}>
                   <Text
                     bold={bold}
                     backgroundColor={
@@ -468,11 +509,19 @@ export function DiffView({
                         : undefined
                     }
                   >
-                    {renderGutter(line, theme, bold, highlightStyle, hasComment)}
+                    {renderGutter(
+                      line,
+                      theme,
+                      bold,
+                      highlightStyle,
+                      hasComment,
+                      wrapRow === 0,
+                    )}
                     {renderLineContent(
                       line,
                       theme,
                       contentWidth,
+                      wrapRow,
                       highlightCache,
                       highlightSchemaId,
                       searchQuery,
@@ -490,6 +539,7 @@ export function DiffView({
                 lines={lines}
                 scrollOffset={scrollOffset}
                 viewportHeight={innerHeight}
+                totalRows={totalRows}
                 height={innerHeight}
                 theme={theme}
               />

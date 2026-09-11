@@ -106,33 +106,3 @@ export function highlightFileLines(
 
   return result;
 }
-
-export function truncateTokens(
-  tokens: HighlightToken[],
-  maxWidth: number,
-): HighlightToken[] {
-  if (maxWidth <= 0) return [{ text: '…' }];
-
-  let remaining = maxWidth;
-  const out: HighlightToken[] = [];
-
-  for (const token of tokens) {
-    if (remaining <= 0) break;
-    if (token.text.length <= remaining) {
-      out.push(token);
-      remaining -= token.text.length;
-      continue;
-    }
-    if (remaining === 1) {
-      out.push({ text: '…', className: token.className });
-    } else {
-      out.push({
-        text: token.text.slice(0, remaining - 1) + '…',
-        className: token.className,
-      });
-    }
-    remaining = 0;
-  }
-
-  return out;
-}

@@ -11,6 +11,8 @@ type Props = {
   lines: DisplayLine[];
   scrollOffset: number;
   viewportHeight: number;
+  /** Total visual rows (soft-wrapped). Defaults to `lines.length`. */
+  totalRows?: number;
   height: number;
   theme: Theme;
 };
@@ -39,12 +41,18 @@ export function DiffScrollBar({
   lines,
   scrollOffset,
   viewportHeight,
+  totalRows = lines.length,
   height,
   theme,
 }: Props) {
   const trackHeight = Math.max(1, height);
   const marks = buildScrollMarks(lines, trackHeight);
-  const thumb = viewportThumbRange(scrollOffset, viewportHeight, lines.length, trackHeight);
+  const thumb = viewportThumbRange(
+    scrollOffset,
+    viewportHeight,
+    totalRows,
+    trackHeight,
+  );
 
   return (
     <Box flexDirection="column" height={height} width={1}>

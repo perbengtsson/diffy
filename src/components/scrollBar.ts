@@ -19,6 +19,7 @@ export function isScrollBarHit(
     columns: number;
     filePaneWidth: number;
     contentHeight: number;
+    /** Visual row count (soft-wrapped), used for scrollbar visibility. */
     totalLines: number;
   },
 ): boolean {

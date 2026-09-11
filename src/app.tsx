@@ -4,7 +4,7 @@ import { basename, join } from 'node:path';
 import { Box, useApp, useInput, useStdin, useStdout } from 'ink';
 import { FileList } from './components/FileList.js';
 import { FileSummary, fileSummaryHeight } from './components/FileSummary.js';
-import { DiffView, DIFF_GUTTER_WIDTH } from './components/DiffView.js';
+import { DiffView } from './components/DiffView.js';
 import { SearchBar } from './components/SearchBar.js';
 import { CommentBar } from './components/CommentBar.js';
 import { GoToLineBar } from './components/GoToLineBar.js';
@@ -56,6 +56,14 @@ import { findDisplayLineIndexByNumber } from './diff/goToLine.js';
 import type { DisplayLine } from './diff/types.js';
 import { wordAtColumn } from './diff/wordAt.js';
 import {
+  DIFF_GUTTER_WIDTH,
+  logicalLineAtVisualRow,
+  resolveDiffWrapLayout,
+  scrollToShowRange,
+  visualRowRangeForLine,
+  wrapSegmentOffset,
+} from './diff/wrap.js';
+import {
   buildLineHighlightCache,
   type LineHighlightCache,
 } from './highlight/cache.js';
@@ -103,8 +111,6 @@ import {
   scrollOffsetFromTrackRow,
   isScrollBarHit,
   centeredScrollOffset,
-  needsScrollBar,
-  scrollBarChromeWidth,
 } from './components/scrollBar.js';
 import {
   clampFilePaneWidth,
@@ -258,14 +264,18 @@ export function App({
   const fileHeaderHeight = 1;
   const diffHeight = Math.max(1, contentHeight - tabBarHeight);
   const repoName = basename(snapshot.repoRoot);
+  const diffWrapLayout = useMemo(
+    () => resolveDiffWrapLayout(displayLines, diffPaneWidth, diffHeight),
+    [diffHeight, diffPaneWidth, displayLines],
+  );
   const scrollBarLayout = useMemo(
     () => ({
       columns,
       filePaneWidth,
       contentHeight: diffHeight,
-      totalLines: displayLines.length,
+      totalLines: diffWrapLayout.totalRows,
     }),
-    [columns, diffHeight, displayLines.length, filePaneWidth],
+    [columns, diffHeight, diffWrapLayout.totalRows, filePaneWidth],
   );
 
   const treeFiles = useMemo(
@@ -497,7 +507,7 @@ export function App({
   }, [selectedFile, snapshot.mode, snapshot.repoRoot]);
 
   const maxFileScroll = Math.max(0, visibleFileRows.length - fileListHeight);
-  const maxDiffScroll = Math.max(0, displayLines.length - diffHeight);
+  const maxDiffScroll = Math.max(0, diffWrapLayout.totalRows - diffHeight);
 
   useEffect(() => {
     const path = ensureFileVisibleRef.current;
@@ -606,12 +616,13 @@ export function App({
   const scrollToLine = useCallback(
     (lineIndex: number) => {
       setCursorLine(lineIndex);
+      const { start } = visualRowRangeForLine(diffWrapLayout, lineIndex);
       setDiffScroll(
-        centeredScrollOffset(lineIndex, diffHeight, displayLines.length),
+        centeredScrollOffset(start, diffHeight, diffWrapLayout.totalRows),
       );
       setFocus('diff');
     },
-    [diffHeight, displayLines.length],
+    [diffHeight, diffWrapLayout],
   );
 
   const goToSearchMatch = useCallback(
@@ -1181,7 +1192,7 @@ export function App({
         const offset = scrollOffsetFromTrackRow(
           trackRow,
           diffHeight,
-          displayLines.length,
+          diffWrapLayout.totalRows,
           diffHeight,
         );
         setFocus('diff');
@@ -1212,7 +1223,7 @@ export function App({
         const offset = scrollOffsetFromTrackRow(
           trackRow,
           diffHeight,
-          displayLines.length,
+          diffWrapLayout.totalRows,
           diffHeight,
         );
         setFocus('diff');
@@ -1277,8 +1288,9 @@ export function App({
         event.y <= contentHeight
       ) {
         setFocus('diff');
-        if (displayLines.length === 0) return;
-        const lineIndex = event.y - 1 - tabBarHeight + diffScroll;
+        if (displayLines.length === 0 || diffWrapLayout.totalRows === 0) return;
+        const visualRow = event.y - 1 - tabBarHeight + diffScroll;
+        const lineIndex = logicalLineAtVisualRow(diffWrapLayout, visualRow);
         if (lineIndex < 0 || lineIndex >= displayLines.length) return;
         setCursorLine(lineIndex);
 
@@ -1286,21 +1298,16 @@ export function App({
         if (!line || !isSearchableLine(line)) return;
 
         const paneX = event.x - filePaneWidth - 1;
-        const chrome = scrollBarChromeWidth(
-          needsScrollBar(displayLines.length, diffHeight),
-        );
-        const linesWidth = Math.max(10, diffPaneWidth - chrome);
-        const contentWidth = Math.max(10, linesWidth - DIFF_GUTTER_WIDTH);
+        const { contentWidth } = diffWrapLayout;
         const contentCol = paneX - DIFF_GUTTER_WIDTH;
         if (contentCol < 0 || contentCol >= contentWidth) return;
-        if (
-          line.content.length > contentWidth &&
-          contentCol >= contentWidth - 1
-        ) {
-          return;
-        }
 
-        const hit = wordAtColumn(line.content, contentCol);
+        const { start } = visualRowRangeForLine(diffWrapLayout, lineIndex);
+        const wrapRow = visualRow - start;
+        const charIndex = wrapSegmentOffset(wrapRow, contentWidth) + contentCol;
+        if (charIndex < 0 || charIndex >= line.content.length) return;
+
+        const hit = wordAtColumn(line.content, charIndex);
         if (!hit) return;
 
         const { state, isDouble } = registerClick(
@@ -1362,6 +1369,7 @@ export function App({
       diffHeight,
       diffPaneWidth,
       diffScroll,
+      diffWrapLayout,
       displayLines,
       fileHeaderHeight,
       fileListHeight,
@@ -1755,27 +1763,43 @@ export function App({
     if (key.downArrow) {
       setCursorLine((c) => {
         const next = Math.min(displayLines.length - 1, c + 1);
-        if (next >= diffScroll + diffHeight) {
-          setDiffScroll((s) => Math.min(maxDiffScroll, s + 1));
-        }
+        const { start, end } = visualRowRangeForLine(diffWrapLayout, next);
+        setDiffScroll((s) =>
+          scrollToShowRange(s, start, end, diffHeight, maxDiffScroll),
+        );
         return next;
       });
     } else if (key.upArrow) {
       setCursorLine((c) => {
         const next = Math.max(0, c - 1);
-        if (next < diffScroll) {
-          setDiffScroll((s) => Math.max(0, s - 1));
-        }
+        const { start, end } = visualRowRangeForLine(diffWrapLayout, next);
+        setDiffScroll((s) =>
+          scrollToShowRange(s, start, end, diffHeight, maxDiffScroll),
+        );
         return next;
       });
     } else if (key.pageDown) {
       const pageSize = Math.max(1, diffHeight);
-      setCursorLine((c) => Math.min(displayLines.length - 1, c + pageSize));
-      setDiffScroll((s) => Math.min(maxDiffScroll, s + pageSize));
+      setDiffScroll((s) => {
+        const nextScroll = Math.min(maxDiffScroll, s + pageSize);
+        const line = logicalLineAtVisualRow(
+          diffWrapLayout,
+          Math.min(
+            diffWrapLayout.totalRows - 1,
+            nextScroll + diffHeight - 1,
+          ),
+        );
+        if (line >= 0) setCursorLine(line);
+        return nextScroll;
+      });
     } else if (key.pageUp) {
       const pageSize = Math.max(1, diffHeight);
-      setCursorLine((c) => Math.max(0, c - pageSize));
-      setDiffScroll((s) => Math.max(0, s - pageSize));
+      setDiffScroll((s) => {
+        const nextScroll = Math.max(0, s - pageSize);
+        const line = logicalLineAtVisualRow(diffWrapLayout, nextScroll);
+        if (line >= 0) setCursorLine(line);
+        return nextScroll;
+      });
     } else if (key.leftArrow) {
       if (fileTabs.tabs.length === 0) {
         setFocus('files');
