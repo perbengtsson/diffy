@@ -4,6 +4,8 @@ Terminal git diff reviewer (Ink + React). Browse a repo file tree, open full-fil
 
 Requires Node 20+, an interactive TTY, and `git`.
 
+![Diffy example](./docs/example.png)
+
 Licensed under [MIT](./LICENSE).
 
 ## Install
