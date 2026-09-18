@@ -4,6 +4,8 @@ Terminal git diff reviewer (Ink + React). Browse a repo file tree, open full-fil
 
 Requires Node 20+, an interactive TTY, and `git`.
 
+Licensed under [MIT](./LICENSE).
+
 ## Install
 
 ```bash
@@ -55,7 +57,7 @@ Arrow navigation in the file list opens a dim **preview** tab (leftmost) until t
 
 Press `c` on a diff line to add or edit a comment (empty + Enter deletes). Commented lines show a gutter marker. Press `o` for a review overview (Enter jumps to a comment). Quit with `q` (or Ctrl+C) to print the compiled markdown review (cyan), copy the plain text to the clipboard, and show a resume command.
 
-Clipboard copy uses `pbcopy` (macOS), `wl-copy` / `xclip` / `xsel` (Linux), or a GTK fallback when those tools are missing. On Linux it also fills the PRIMARY selection so middle-click paste works in native terminals.
+Clipboard copy uses OSC 52 when the terminal supports it, then `pbcopy` (macOS), `wl-copy` / `xclip` / `xsel` (Linux), or a GTK fallback when those tools are missing. On Linux it also fills the PRIMARY selection so middle-click paste works in native terminals.
 
 Reviews are cached under `~/.config/diffy/review-<branch>-<YYYY-MM-DD-HHMM>.json` only after you add at least one comment. Use `--resume` (latest) or `--resume <name>` to continue a previous review. Quitting with no comments writes nothing and prints no resume hint.
 
@@ -75,6 +77,7 @@ In the menu: `↑` / `↓` select, Enter opens, `b` / `h` jump to background / s
 | Click file | Open / focus as preview |
 | Double-click file or preview tab | Pin tab |
 | Click directory | Fold / unfold |
+| Click **All/Diff** (files pane header) | Toggle diffs-only ↔ full repo tree (same as `d`) |
 | Click diff line | Move cursor |
 | Double-click word in diff | Find that word (replaces query if Find is open) |
 | Click tab / tab × | Activate / close |
