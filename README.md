@@ -2,7 +2,7 @@
 
 Terminal git diff reviewer (Ink + React). Browse a repo file tree, open full-file unified diffs with surrounding context, syntax highlighting, and line comments that compile into a markdown review.
 
-Requires Node 20+, an interactive TTY, and `git`.
+Requires Node 22+, an interactive TTY, and `git`.
 
 ![Diffy example](./docs/example.png)
 
