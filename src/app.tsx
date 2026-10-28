@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { access } from 'node:fs/promises';
 import { basename, join } from 'node:path';
-import { Box, useApp, useInput, useStdin, useStdout } from 'ink';
+import { Box, useApp, useInput, useStdout } from 'ink';
 import { FileList } from './components/FileList.js';
 import { FileSummary, fileSummaryHeight } from './components/FileSummary.js';
 import { DiffView } from './components/DiffView.js';
@@ -150,9 +150,8 @@ export function App({
   initialHighlightSchemaId = DEFAULT_HIGHLIGHT_SCHEMA_ID,
   onQuitReview,
 }: Props) {
-  const { exit } = useApp();
+  const { exit, suspendTerminal } = useApp();
   const { columns, rows } = useTerminalSize();
-  const { setRawMode, isRawModeSupported } = useStdin();
   const { stdout } = useStdout();
   const [diffBgPaletteId, setDiffBgPaletteId] = useState(initialDiffBgPaletteId);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
@@ -947,40 +946,39 @@ export function App({
     setError(null);
     setNotice(null);
 
-    const result = await runExternalEditor({
-      filePath: absPath,
-      line,
-      onBeforeSpawn: () => {
-        stdout.write(DISABLE_MOUSE);
-        stdout.write('\x1b[?25h'); // show cursor for the editor
-        if (isRawModeSupported) setRawMode(false);
-      },
-      onAfterSpawn: () => {
-        if (isRawModeSupported) setRawMode(true);
-        stdout.write('\x1b[?25l');
-        stdout.write(ENABLE_MOUSE);
-      },
+    // Hand the TTY to $EDITOR (exits alternate screen / raw mode), then restore.
+    let result: Awaited<ReturnType<typeof runExternalEditor>> | undefined;
+    await suspendTerminal(async () => {
+      result = await runExternalEditor({
+        filePath: absPath,
+        line,
+        onBeforeSpawn: () => {
+          stdout.write(DISABLE_MOUSE);
+        },
+        onAfterSpawn: () => {
+          stdout.write(ENABLE_MOUSE);
+        },
+      });
     });
 
     editorOpenRef.current = false;
 
-    if (!result.ok) {
+    if (result && !result.ok) {
       setNotice(null);
       setError(result.error);
     }
 
-    // Force a full redraw after the editor trashed the screen, then reload.
+    // Remount root after suspend redraw, then reload in case the file changed.
     setScreenEpoch((n) => n + 1);
     await refresh();
   }, [
     cursorLine,
     displayLines,
-    isRawModeSupported,
     refresh,
     selectedFile,
-    setRawMode,
     snapshot.repoRoot,
     stdout,
+    suspendTerminal,
   ]);
 
   const submitGoToLine = useCallback(() => {

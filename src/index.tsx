@@ -86,6 +86,7 @@ async function main() {
   let quitTerminal = '';
   let quitPlain = '';
   // exitOnCtrlC: false so Ctrl+C reaches App's quit handler (copy review + persist).
+  // alternateScreen: keep prior terminal scrollback; restore primary buffer on exit.
   const { waitUntilExit } = render(
     <App
       initialSnapshot={snapshot}
@@ -100,7 +101,7 @@ async function main() {
         quitPlain = plain;
       }}
     />,
-    { exitOnCtrlC: false },
+    { exitOnCtrlC: false, alternateScreen: true },
   );
 
   await waitUntilExit();
