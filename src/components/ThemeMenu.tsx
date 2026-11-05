@@ -1,7 +1,7 @@
 import { Box, Text } from 'ink';
 import type { Theme } from '../theme.js';
 
-export type ThemeMenuItemId = 'bg' | 'syntax';
+export type ThemeMenuItemId = 'bg' | 'syntax' | 'icons';
 
 export const THEME_MENU_ITEMS: ReadonlyArray<{
   id: ThemeMenuItemId;
@@ -18,6 +18,11 @@ export const THEME_MENU_ITEMS: ReadonlyArray<{
     label: 'Syntax highlight',
     blurb: 'Token colors for code',
   },
+  {
+    id: 'icons',
+    label: 'File icons',
+    blurb: 'Nerd Font glyphs',
+  },
 ];
 
 type Props = {
@@ -27,6 +32,7 @@ type Props = {
   theme: Theme;
   bgLabel: string;
   syntaxLabel: string;
+  iconsEnabled: boolean;
 };
 
 export function ThemeMenu({
@@ -36,10 +42,14 @@ export function ThemeMenu({
   theme,
   bgLabel,
   syntaxLabel,
+  iconsEnabled,
 }: Props) {
   const header = 'Themes · ↑↓ · Enter · Esc';
-  const currentFor = (id: ThemeMenuItemId) =>
-    id === 'bg' ? bgLabel : syntaxLabel;
+  const currentFor = (id: ThemeMenuItemId) => {
+    if (id === 'bg') return bgLabel;
+    if (id === 'syntax') return syntaxLabel;
+    return iconsEnabled ? 'On' : 'Off';
+  };
 
   return (
     <Box flexDirection="column" width={width} height={height}>

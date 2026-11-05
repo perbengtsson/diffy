@@ -23,6 +23,7 @@ async function main() {
       'With --base, also include uncommitted working tree changes',
     )
     .option('--no-watch', 'Disable automatic refresh on file changes')
+    .option('--icons', 'Enable Nerd Font file/folder icons in the file tree')
     .option(
       '--resume [name]',
       'Resume a saved review (basename or path; omit for latest in this repo)',
@@ -34,6 +35,7 @@ async function main() {
     base?: string;
     includeUncommitted?: boolean;
     noWatch?: boolean;
+    icons?: boolean;
     resume?: string | true;
   }>();
 
@@ -96,6 +98,7 @@ async function main() {
       reviewPath={reviewPath}
       initialDiffBgPaletteId={userConfig.diffBgPaletteId}
       initialHighlightSchemaId={userConfig.highlightSchemaId}
+      initialIcons={opts.icons === true ? true : userConfig.icons}
       onQuitReview={({ terminal, plain }) => {
         quitTerminal = terminal;
         quitPlain = plain;

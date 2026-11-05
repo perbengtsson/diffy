@@ -2,12 +2,15 @@ import { Box, Text } from 'ink';
 import type { FileTreeRow } from '../files/tree.js';
 import { isEditedFile } from '../files/tree.js';
 import { fitFileListRow, formatFileStatsSuffix } from '../files/fileListLayout.js';
+import { formatTreeIconPrefix, resolveTreeIcon } from '../icons/nerd.js';
 import type { DiffFile } from '../git/types.js';
 import type { Theme } from '../theme.js';
 
 /** Same yellow wash as DiffView search matches. */
 const SEARCH_HIT_BG = 'yellow';
 const SEARCH_HIT_FG = 'black';
+/** Beige for directory fold markers (not git-status colored). */
+const FOLDER_MARKER_FG = '#E8C47A';
 
 type Props = {
   rows: FileTreeRow[];
@@ -22,6 +25,8 @@ type Props = {
   searchHitPaths?: ReadonlySet<string>;
   /** Directories that contain a search-hit file. */
   dirsWithSearchHits?: ReadonlySet<string>;
+  /** Show Nerd Font file/folder icons instead of chevron fold markers. */
+  icons?: boolean;
 };
 
 function statusColor(status: DiffFile['status'], theme: Theme): string | undefined {
@@ -50,6 +55,7 @@ export function FileList({
   dirEditStatuses,
   searchHitPaths,
   dirsWithSearchHits,
+  icons = false,
 }: Props) {
   const innerHeight = Math.max(1, height);
   const visible = rows.slice(scrollOffset, scrollOffset + innerHeight);
@@ -91,11 +97,20 @@ export function FileList({
                 : false;
           const rawLabel =
             row.node.kind === 'dir' ? `${row.node.name}/` : row.node.name;
-          const treePrefix =
-            row.node.kind === 'dir'
+          // Dirs keep medium ⏵/⏷ fold markers; Nerd Font glyphs are for files only.
+          const treeIcon =
+            icons && row.node.kind === 'file'
+              ? resolveTreeIcon({
+                  name: row.node.name,
+                  kind: 'file',
+                })
+              : undefined;
+          const treePrefix = treeIcon
+            ? formatTreeIconPrefix(treeIcon.glyph)
+            : row.node.kind === 'dir'
               ? row.isExpanded
-                ? '▾ '
-                : '▸ '
+                ? '⏷ '
+                : '⏵ '
               : '';
           const showStats =
             row.node.kind === 'file' &&
@@ -128,6 +143,13 @@ export function FileList({
 
           const isDir = row.node.kind === 'dir';
           const boldLabel = isDir || highlighted || isSearchHit;
+          // Prefix colors ignore git status: beige folds, typed file icons.
+          const prefixColor =
+            selected || isSearchHit
+              ? color
+              : isDir
+                ? FOLDER_MARKER_FG
+                : (treeIcon?.color ?? theme.dimFg);
 
           return (
             <Box key={`${row.node.path}:${index}`} height={1} paddingX={1}>
@@ -141,10 +163,20 @@ export function FileList({
                     {fitted.indent}
                   </Text>
                 )}
-                <Text bold={boldLabel} color={color} backgroundColor={backgroundColor}>
-                  {fitted.treePrefix}
-                  {fitted.label}
-                </Text>
+                {fitted.treePrefix.length > 0 ? (
+                  <>
+                    <Text color={prefixColor} backgroundColor={backgroundColor}>
+                      {fitted.treePrefix}
+                    </Text>
+                    <Text bold={boldLabel} color={color} backgroundColor={backgroundColor}>
+                      {fitted.label}
+                    </Text>
+                  </>
+                ) : (
+                  <Text bold={boldLabel} color={color} backgroundColor={backgroundColor}>
+                    {fitted.label}
+                  </Text>
+                )}
                 {file && fitted.stats.length > 0 && (
                   <Text bold color={theme.dimFg}>
                     {' '}

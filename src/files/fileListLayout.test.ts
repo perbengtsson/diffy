@@ -48,6 +48,23 @@ describe('fitFileListRow', () => {
     assert.ok(line.length <= width - FILE_LIST_ROW_CHROME);
     assert.equal(fitted.stats, '');
   });
+
+  it('budgets a nerd-font icon prefix (1 glyph + space) like chevrons', () => {
+    const width = 28;
+    const iconPrefix = '\uE628 '; //  + space
+    assert.equal(iconPrefix.length, 2);
+    const fitted = fitFileListRow({
+      width,
+      depth: 1,
+      treePrefix: iconPrefix,
+      label: 'FileList.tsx',
+      stats: formatFileStatsSuffix({ additions: 12, deletions: 3 }),
+    });
+    const line =
+      fitted.indent + fitted.treePrefix + fitted.label + fitted.stats;
+    assert.ok(line.length <= width - FILE_LIST_ROW_CHROME);
+    assert.equal(fitted.treePrefix, iconPrefix);
+  });
 });
 
 describe('truncateName', () => {

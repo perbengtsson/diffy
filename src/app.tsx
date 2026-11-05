@@ -137,6 +137,7 @@ type Props = {
   reviewPath: string;
   initialDiffBgPaletteId?: string;
   initialHighlightSchemaId?: string;
+  initialIcons?: boolean;
   onQuitReview?: (payload: { terminal: string; plain: string }) => void;
 };
 
@@ -148,6 +149,7 @@ export function App({
   reviewPath,
   initialDiffBgPaletteId = DEFAULT_DIFF_BG_PALETTE_ID,
   initialHighlightSchemaId = DEFAULT_HIGHLIGHT_SCHEMA_ID,
+  initialIcons = false,
   onQuitReview,
 }: Props) {
   const { exit, suspendTerminal } = useApp();
@@ -162,6 +164,7 @@ export function App({
   const [highlightSchemaId, setHighlightSchemaId] = useState(
     initialHighlightSchemaId,
   );
+  const [icons, setIcons] = useState(initialIcons);
   const [hlPickerOpen, setHlPickerOpen] = useState(false);
   const [hlPickerIndex, setHlPickerIndex] = useState(0);
   const [hlPickerSavedId, setHlPickerSavedId] = useState(initialHighlightSchemaId);
@@ -1506,6 +1509,7 @@ export function App({
           void saveUserConfig({
             diffBgPaletteId: chosen.id,
             highlightSchemaId,
+            icons,
           }).catch((err) => {
             setError(err instanceof Error ? err.message : String(err));
           });
@@ -1537,6 +1541,7 @@ export function App({
           void saveUserConfig({
             diffBgPaletteId,
             highlightSchemaId: chosen.id,
+            icons,
           }).catch((err) => {
             setError(err instanceof Error ? err.message : String(err));
           });
@@ -1582,6 +1587,17 @@ export function App({
         const item = THEME_MENU_ITEMS[themeMenuIndex];
         if (item?.id === 'bg') openBgPicker();
         else if (item?.id === 'syntax') openHlPicker();
+        else if (item?.id === 'icons') {
+          const next = !icons;
+          setIcons(next);
+          void saveUserConfig({
+            diffBgPaletteId,
+            highlightSchemaId,
+            icons: next,
+          }).catch((err) => {
+            setError(err instanceof Error ? err.message : String(err));
+          });
+        }
         return;
       }
       return;
@@ -1840,6 +1856,7 @@ export function App({
                   theme={theme}
                   bgLabel={findDiffBgPalette(diffBgPaletteId).label}
                   syntaxLabel={findHighlightSchema(highlightSchemaId).label}
+                  iconsEnabled={icons}
                 />
               ) : bgPickerOpen ? (
                 <DiffBgPicker
@@ -1875,6 +1892,7 @@ export function App({
                     dirEditStatuses={dirEditStatuses}
                     searchHitPaths={searchHitPaths}
                     dirsWithSearchHits={dirsWithSearchHits}
+                    icons={icons}
                   />
                   <FileSummary
                     summary={changeSummary}

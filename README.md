@@ -26,6 +26,7 @@ diffy --staged                     # staged only
 diffy --base main                  # branch diff vs main
 diffy --base origin/main --include-uncommitted
 diffy --no-watch                     # disable auto-refresh
+diffy --icons                        # Nerd Font file/folder icons (this run)
 diffy --resume                       # resume latest review for this repo
 diffy --resume review-main-2026-07-18-1024
 ```
@@ -69,8 +70,9 @@ Press `t` for themes (saved to `~/.config/diffy/config.json`):
 
 - **Diff background** — add/delete row wash (several palettes; light/dark terminal aware).
 - **Syntax highlight** — token color schemes (Default, Monokai, GitHub, Muted, Dracula, …).
+- **File icons** — Nerd Font folder/file glyphs in the file tree (off by default; needs a [Nerd Font](https://www.nerdfonts.com/) in the terminal). Enter toggles On/Off. Also available as `"icons": true` in config or `--icons` for one run.
 
-In the menu: `↑` / `↓` select, Enter opens, `b` / `h` jump to background / syntax, Esc cancels. In a picker, `↑` / `↓` live-preview and Enter applies.
+In the menu: `↑` / `↓` select, Enter opens (or toggles icons), `b` / `h` jump to background / syntax, Esc cancels. In a picker, `↑` / `↓` live-preview and Enter applies.
 
 ### Mouse
 
@@ -112,7 +114,7 @@ In the menu: `↑` / `↓` select, Enter opens, `b` / `h` jump to background / s
 | `j` / `k` | Same as Shift+↓ / Shift+↑ |
 | `c` | Comment / edit comment on current line (diff focus) |
 | `o` | Review overview (list comments; Enter jumps) |
-| `t` | Themes (diff background + syntax highlight) |
+| `t` | Themes (diff background, syntax highlight, file icons) |
 | `h` | Collapse / expand the files pane |
 | `d` | Toggle diffs-only file list (changed files only ↔ full repo tree) |
 | `r` | Refresh |

@@ -14,12 +14,15 @@ import {
 export type UserConfig = {
   diffBgPaletteId: string;
   highlightSchemaId: string;
+  /** Nerd Font file/folder icons in the file tree (opt-in). */
+  icons: boolean;
 };
 
 export function defaultUserConfig(): UserConfig {
   return {
     diffBgPaletteId: DEFAULT_DIFF_BG_PALETTE_ID,
     highlightSchemaId: DEFAULT_HIGHLIGHT_SCHEMA_ID,
+    icons: false,
   };
 }
 
@@ -39,7 +42,9 @@ function normalizeConfig(raw: unknown): UserConfig {
     typeof obj.highlightSchemaId === 'string' && obj.highlightSchemaId
       ? findHighlightSchema(obj.highlightSchemaId).id
       : defaults.highlightSchemaId;
-  return { diffBgPaletteId, highlightSchemaId };
+  const icons =
+    typeof obj.icons === 'boolean' ? obj.icons : defaults.icons;
+  return { diffBgPaletteId, highlightSchemaId, icons };
 }
 
 export async function loadUserConfig(home = homedir()): Promise<UserConfig> {
