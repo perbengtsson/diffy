@@ -2,8 +2,16 @@ import gitDiffParser from 'gitdiff-parser';
 import type { File } from 'gitdiff-parser';
 import { expandTabs } from '../display/text.js';
 import type { DiffFile, DiffMode } from '../git/types.js';
-import { getFileRevision, readFullFile } from '../git/diff.js';
+import {
+  getFileRevision,
+  readFullFile,
+  revisionLooksBinary,
+} from '../git/diff.js';
 import type { DisplayLine } from './types.js';
+
+const BINARY_PLACEHOLDER: DisplayLine[] = [
+  { kind: 'binary', content: 'Binary file — no diff preview' },
+];
 
 function findParsedFile(parsed: File[], filePath: string): File | undefined {
   const matches = parsed.filter(
@@ -155,7 +163,13 @@ export async function buildDisplayLines(
   repoRoot: string,
 ): Promise<DisplayLine[]> {
   if (file.isBinary) {
-    return [{ kind: 'binary', content: 'Binary file — no diff preview' }];
+    return BINARY_PLACEHOLDER;
+  }
+
+  // Defense: unchanged binaries are easy to mis-flag; never dump raw bytes into the TTY.
+  const probeSide = file.status === 'deleted' ? 'old' : 'new';
+  if (await revisionLooksBinary(repoRoot, getFileRevision(mode, file, probeSide))) {
+    return BINARY_PLACEHOLDER;
   }
 
   if (file.status === 'unchanged') {

@@ -1,5 +1,7 @@
-import { readFileSync } from 'node:fs';
+import { execFile } from 'node:child_process';
+import { closeSync, openSync, readFileSync, readSync } from 'node:fs';
 import { join } from 'node:path';
+import { promisify } from 'node:util';
 import { gitOrThrow, gitDiffOutput, findRepoRoot } from './runner.js';
 import type {
   DiffFile,
@@ -9,7 +11,70 @@ import type {
   FileStatus,
 } from './types.js';
 
+const execFileAsync = promisify(execFile);
 const CONTEXT_LINES = 3;
+/** Git-style probe window: NUL in the first 8 KiB means binary. */
+const BINARY_PROBE_BYTES = 8000;
+
+/** True when `sample` looks like binary (NUL in the first 8 KiB). */
+export function looksBinary(sample: Buffer): boolean {
+  const end = Math.min(sample.length, BINARY_PROBE_BYTES);
+  return sample.subarray(0, end).includes(0);
+}
+
+function workingTreeLooksBinary(repoRoot: string, path: string): boolean {
+  try {
+    const fd = openSync(join(repoRoot, path), 'r');
+    try {
+      const buf = Buffer.alloc(BINARY_PROBE_BYTES);
+      const n = readSync(fd, buf, 0, BINARY_PROBE_BYTES, 0);
+      return looksBinary(buf.subarray(0, n));
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return false;
+  }
+}
+
+async function gitShowBuffer(
+  repoRoot: string,
+  revPath: string,
+): Promise<Buffer | null> {
+  try {
+    const { stdout } = await execFileAsync('git', ['show', revPath], {
+      cwd: repoRoot,
+      encoding: 'buffer',
+      maxBuffer: 50 * 1024 * 1024,
+    });
+    return stdout;
+  } catch {
+    return null;
+  }
+}
+
+/** Probe whether a revision's content looks binary (working tree or git object). */
+export async function revisionLooksBinary(
+  repoRoot: string,
+  revision: FileRevision,
+): Promise<boolean> {
+  if (revision.ref === null) {
+    return workingTreeLooksBinary(repoRoot, revision.path);
+  }
+
+  const buf = await gitShowBuffer(
+    repoRoot,
+    `${revision.ref}:${revision.path}`,
+  );
+  if (!buf) return false;
+  return looksBinary(buf);
+}
+
+function splitTextLines(content: string): string[] {
+  const lines = content.split('\n');
+  if (lines.at(-1) === '') lines.pop();
+  return lines;
+}
 
 function countStats(rawDiff: string): { additions: number; deletions: number } {
   let additions = 0;
@@ -64,6 +129,7 @@ async function listTrackedFiles(repoRoot: string): Promise<string[]> {
 function mergeWithTrackedFiles(
   changedFiles: DiffFile[],
   trackedPaths: string[],
+  repoRoot: string,
 ): DiffFile[] {
   const changedMap = new Map(changedFiles.map((file) => [file.path, file]));
   const paths = new Set(trackedPaths);
@@ -81,7 +147,7 @@ function mergeWithTrackedFiles(
         additions: 0,
         deletions: 0,
         rawDiff: '',
-        isBinary: false,
+        isBinary: workingTreeLooksBinary(repoRoot, path),
       });
     }
   }
@@ -236,7 +302,7 @@ export async function loadDiffSnapshot(
       ? await getUncommittedFiles(repoRoot, mode.stagedOnly)
       : await getBaseDiffFiles(repoRoot, mode.base, mode.includeUncommitted);
   const trackedPaths = await listTrackedFiles(repoRoot);
-  const files = mergeWithTrackedFiles(changedFiles, trackedPaths);
+  const files = mergeWithTrackedFiles(changedFiles, trackedPaths, repoRoot);
 
   return {
     repoRoot,
@@ -303,26 +369,7 @@ export async function readLineRange(
 ): Promise<string[]> {
   if (startLine < 1 || endLine < startLine) return [];
 
-  let content: string;
-  if (revision.ref === null) {
-    try {
-      content = readFileSync(join(repoRoot, revision.path), 'utf8');
-    } catch {
-      return [];
-    }
-  } else {
-    try {
-      content = await gitOrThrow(
-        ['show', `${revision.ref}:${revision.path}`],
-        repoRoot,
-      );
-    } catch {
-      return [];
-    }
-  }
-
-  const lines = content.split('\n');
-  if (lines.at(-1) === '') lines.pop();
+  const lines = await readFullFile(repoRoot, revision);
   return lines.slice(startLine - 1, endLine);
 }
 
@@ -332,26 +379,20 @@ export async function readFullFile(
 ): Promise<string[]> {
   if (revision.ref === null) {
     try {
-      const content = readFileSync(join(repoRoot, revision.path), 'utf8');
-      const lines = content.split('\n');
-      if (lines.at(-1) === '') lines.pop();
-      return lines;
+      const buf = readFileSync(join(repoRoot, revision.path));
+      if (looksBinary(buf)) return [];
+      return splitTextLines(buf.toString('utf8'));
     } catch {
       return [];
     }
   }
 
-  try {
-    const content = await gitOrThrow(
-      ['show', `${revision.ref}:${revision.path}`],
-      repoRoot,
-    );
-    const lines = content.split('\n');
-    if (lines.at(-1) === '') lines.pop();
-    return lines;
-  } catch {
-    return [];
-  }
+  const buf = await gitShowBuffer(
+    repoRoot,
+    `${revision.ref}:${revision.path}`,
+  );
+  if (!buf || looksBinary(buf)) return [];
+  return splitTextLines(buf.toString('utf8'));
 }
 
 export { CONTEXT_LINES };
