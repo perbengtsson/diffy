@@ -22,9 +22,9 @@ export function countEditedFiles(files: DiffFile[]): number {
   return files.filter(isEditedFile).length;
 }
 
+/** Index of the first edited file, or `-1` when none (keep the tree closed). */
 export function findFirstEditedIndex(files: DiffFile[]): number {
-  const idx = files.findIndex(isEditedFile);
-  return idx >= 0 ? idx : 0;
+  return files.findIndex(isEditedFile);
 }
 
 export function buildFileTree(files: DiffFile[]): FileTreeNode[] {

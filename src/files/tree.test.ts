@@ -6,6 +6,7 @@ import {
   buildDirEditStatuses,
   buildFileTree,
   buildInitialCollapsedDirs,
+  findFirstEditedIndex,
   flattenFilesInTreeOrder,
   refreshCollapsedDirs,
 } from './tree.js';
@@ -80,6 +81,49 @@ describe('flattenFilesInTreeOrder', () => {
       ordered.map((f) => f.path),
       ['nested/b.ts', 'a.ts', 'z.ts'],
     );
+  });
+});
+
+describe('findFirstEditedIndex', () => {
+  it('returns the first edited file index', () => {
+    const files = [
+      file('a.ts', 'unchanged'),
+      file('b.ts', 'modified'),
+      file('c.ts', 'added'),
+    ];
+    assert.equal(findFirstEditedIndex(files), 1);
+  });
+
+  it('returns -1 when there are no edits so startup does not open a folder', () => {
+    const files = [
+      file('src/a.ts', 'unchanged'),
+      file('src/nested/b.ts', 'unchanged'),
+    ];
+    assert.equal(findFirstEditedIndex(files), -1);
+  });
+});
+
+describe('buildInitialCollapsedDirs', () => {
+  it('collapses every directory when there are no changes', () => {
+    const files = [
+      file('src/a.ts', 'unchanged'),
+      file('src/nested/b.ts', 'unchanged'),
+      file('lib/c.ts', 'unchanged'),
+    ];
+    const collapsed = buildInitialCollapsedDirs(files);
+    assert.ok(collapsed.has('src'));
+    assert.ok(collapsed.has('src/nested'));
+    assert.ok(collapsed.has('lib'));
+  });
+
+  it('keeps directories that contain edits expanded', () => {
+    const files = [
+      file('src/a.ts', 'unchanged'),
+      file('lib/c.ts', 'modified'),
+    ];
+    const collapsed = buildInitialCollapsedDirs(files);
+    assert.ok(collapsed.has('src'));
+    assert.ok(!collapsed.has('lib'));
   });
 });
 

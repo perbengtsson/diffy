@@ -242,8 +242,11 @@ export function App({
   viewStateRef.current = { cursorLine, diffScroll };
   const selectedPathRef = useRef<string | undefined>(undefined);
 
+  const firstEditedIdx = findFirstEditedIndex(initialSnapshot.files);
   const initialPath =
-    initialSnapshot.files[findFirstEditedIndex(initialSnapshot.files)]?.path;
+    firstEditedIdx >= 0
+      ? initialSnapshot.files[firstEditedIdx]?.path
+      : undefined;
   const fileTabs = useFileTabs(
     initialPath ? preview(EMPTY_FILE_TABS, initialPath) : EMPTY_FILE_TABS,
   );
