@@ -1,4 +1,4 @@
-import type { DiffFile } from '../git/types.js';
+import type { DiffFile, FileStatus } from '../git/types.js';
 
 export type FileTreeNode = {
   name: string;
@@ -87,10 +87,31 @@ export function buildAncestorDirs(filePaths: Iterable<string>): Set<string> {
   return dirs;
 }
 
+/**
+ * Aggregated edit status per ancestor directory of edited files.
+ * Same status for all edited descendants → that status; mixed → `modified`.
+ */
+export function buildDirEditStatuses(files: DiffFile[]): Map<string, FileStatus> {
+  const statuses = new Map<string, FileStatus>();
+  for (const file of files) {
+    if (!isEditedFile(file)) continue;
+    const parts = file.path.split('/');
+    let path = '';
+    for (let i = 0; i < parts.length - 1; i++) {
+      path = path ? `${path}/${parts[i]}` : parts[i]!;
+      const existing = statuses.get(path);
+      if (existing === undefined) {
+        statuses.set(path, file.status);
+      } else if (existing !== file.status) {
+        statuses.set(path, 'modified');
+      }
+    }
+  }
+  return statuses;
+}
+
 export function buildDirsWithChanges(files: DiffFile[]): Set<string> {
-  return buildAncestorDirs(
-    files.filter(isEditedFile).map((file) => file.path),
-  );
+  return new Set(buildDirEditStatuses(files).keys());
 }
 
 export function buildInitialCollapsedDirs(files: DiffFile[]): Set<string> {

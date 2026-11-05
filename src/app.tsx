@@ -85,7 +85,7 @@ import { runExternalEditor } from './editor/runExternalEditor.js';
 import {
   buildFileTree,
   buildAncestorDirs,
-  buildDirsWithChanges,
+  buildDirEditStatuses,
   buildInitialCollapsedDirs,
   findFirstEditedIndex,
   findRowIndexForPath,
@@ -289,8 +289,8 @@ export function App({
     () => flattenFilesInTreeOrder(buildFileTree(snapshot.files)),
     [snapshot.files],
   );
-  const dirsWithChanges = useMemo(
-    () => buildDirsWithChanges(snapshot.files),
+  const dirEditStatuses = useMemo(
+    () => buildDirEditStatuses(snapshot.files),
     [snapshot.files],
   );
   const visibleFileRows = useMemo(
@@ -1872,7 +1872,7 @@ export function App({
                     height={fileListHeight}
                     width={filePaneWidth}
                     theme={theme}
-                    dirsWithChanges={dirsWithChanges}
+                    dirEditStatuses={dirEditStatuses}
                     searchHitPaths={searchHitPaths}
                     dirsWithSearchHits={dirsWithSearchHits}
                   />

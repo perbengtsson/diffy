@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 import type { DiffFile } from '../git/types.js';
 import {
   buildAncestorDirs,
+  buildDirEditStatuses,
   buildFileTree,
   buildInitialCollapsedDirs,
   flattenFilesInTreeOrder,
@@ -24,6 +25,48 @@ describe('buildAncestorDirs', () => {
   it('collects parent directories for each path', () => {
     const dirs = buildAncestorDirs(['src/a.ts', 'src/nested/b.ts', 'root.ts']);
     assert.deepEqual([...dirs].sort(), ['src', 'src/nested']);
+  });
+});
+
+describe('buildDirEditStatuses', () => {
+  it('uses a shared status when all edited descendants match', () => {
+    const statuses = buildDirEditStatuses([
+      file('src/a.ts', 'added'),
+      file('src/b.ts', 'added'),
+      file('src/nested/c.ts', 'added'),
+    ]);
+    assert.equal(statuses.get('src'), 'added');
+    assert.equal(statuses.get('src/nested'), 'added');
+  });
+
+  it('marks mixed-status directories as modified', () => {
+    const statuses = buildDirEditStatuses([
+      file('src/a.ts', 'added'),
+      file('src/b.ts', 'deleted'),
+    ]);
+    assert.equal(statuses.get('src'), 'modified');
+  });
+
+  it('propagates nested conflicts to ancestors', () => {
+    const statuses = buildDirEditStatuses([
+      file('src/nested/a.ts', 'added'),
+      file('src/nested/b.ts', 'modified'),
+      file('lib/c.ts', 'deleted'),
+    ]);
+    assert.equal(statuses.get('src/nested'), 'modified');
+    assert.equal(statuses.get('src'), 'modified');
+    assert.equal(statuses.get('lib'), 'deleted');
+  });
+
+  it('ignores unchanged files and omits dirs with only unchanged children', () => {
+    const statuses = buildDirEditStatuses([
+      file('src/a.ts', 'unchanged'),
+      file('src/nested/b.ts', 'unchanged'),
+      file('lib/c.ts', 'modified'),
+    ]);
+    assert.equal(statuses.has('src'), false);
+    assert.equal(statuses.has('src/nested'), false);
+    assert.equal(statuses.get('lib'), 'modified');
   });
 });
 

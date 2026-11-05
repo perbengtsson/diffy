@@ -16,7 +16,8 @@ type Props = {
   height: number;
   width: number;
   theme: Theme;
-  dirsWithChanges: ReadonlySet<string>;
+  /** Aggregated edit status for directories that contain edits. */
+  dirEditStatuses: ReadonlyMap<string, DiffFile['status']>;
   /** File paths that contain an all-files search hit. */
   searchHitPaths?: ReadonlySet<string>;
   /** Directories that contain a search-hit file. */
@@ -46,7 +47,7 @@ export function FileList({
   height,
   width,
   theme,
-  dirsWithChanges,
+  dirEditStatuses,
   searchHitPaths,
   dirsWithSearchHits,
 }: Props) {
@@ -78,9 +79,13 @@ export function FileList({
             row.node.kind === 'dir'
               ? (dirsWithSearchHits?.has(row.node.path) ?? false)
               : (searchHitPaths?.has(row.node.path) ?? false);
+          const dirStatus =
+            row.node.kind === 'dir'
+              ? dirEditStatuses.get(row.node.path)
+              : undefined;
           const highlighted =
             row.node.kind === 'dir'
-              ? dirsWithChanges.has(row.node.path)
+              ? dirStatus !== undefined
               : file
                 ? isEditedFile(file)
                 : false;
@@ -104,26 +109,31 @@ export function FileList({
             label: rawLabel,
             stats: showStats && file ? formatFileStatsSuffix(file) : '',
           });
+          const editStatus =
+            file && highlighted
+              ? file.status
+              : dirStatus;
           const color = selected
             ? theme.selectedFg
             : isSearchHit
               ? SEARCH_HIT_FG
-              : file && highlighted
-                ? statusColor(file.status, theme)
-                : theme.defaultFg;
+              : editStatus
+                ? statusColor(editStatus, theme)
+                : theme.tabPreviewFg;
           const backgroundColor = selected
             ? theme.selectedBg
             : isSearchHit
               ? SEARCH_HIT_BG
               : undefined;
 
+          const isDir = row.node.kind === 'dir';
+          const boldLabel = isDir || highlighted || isSearchHit;
+
           return (
             <Box key={`${row.node.path}:${index}`} height={1} paddingX={1}>
               <Text
-                bold={highlighted || isSearchHit}
                 backgroundColor={backgroundColor}
                 color={color}
-                dimColor={!highlighted && !selected && !isSearchHit}
                 wrap="truncate"
               >
                 {fitted.indent.length > 0 && (
@@ -131,8 +141,10 @@ export function FileList({
                     {fitted.indent}
                   </Text>
                 )}
-                {fitted.treePrefix}
-                {fitted.label}
+                <Text bold={boldLabel} color={color} backgroundColor={backgroundColor}>
+                  {fitted.treePrefix}
+                  {fitted.label}
+                </Text>
                 {file && fitted.stats.length > 0 && (
                   <Text bold color={theme.dimFg}>
                     {' '}
