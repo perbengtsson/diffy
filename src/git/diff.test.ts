@@ -146,4 +146,30 @@ describe('include-uncommitted nets removed additions (#10)', () => {
     // Worktree matches HEAD — no net change.
     assert.ok(!file || file.status === 'unchanged');
   });
+
+  it('clears --base diff after feature is merged into base', async () => {
+    const dir = await fixtureRepo();
+    const before = await loadDiffSnapshot(dir, {
+      kind: 'base',
+      base: 'main',
+      includeUncommitted: false,
+    });
+    assert.equal(
+      before.files.find((f) => f.path === 'file.txt')?.status,
+      'modified',
+    );
+
+    // Merge feature into main (base catches up) while staying on feature.
+    await git(dir, ['checkout', 'main']);
+    await git(dir, ['merge', 'feature', '-m', 'merge feature']);
+    await git(dir, ['checkout', 'feature']);
+
+    const after = await loadDiffSnapshot(dir, {
+      kind: 'base',
+      base: 'main',
+      includeUncommitted: false,
+    });
+    const file = after.files.find((f) => f.path === 'file.txt');
+    assert.ok(!file || file.status === 'unchanged');
+  });
 });

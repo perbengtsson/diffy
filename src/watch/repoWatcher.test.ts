@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, it } from 'node:test';
 import {
+  listGitRefWatchDirs,
   listWatchDirs,
   shouldIgnorePath,
   watchRepo,
@@ -54,6 +55,24 @@ describe('listWatchDirs', () => {
   });
 });
 
+describe('listGitRefWatchDirs', () => {
+  it('includes nested refs and remotes dirs', () => {
+    const root = tempRepo();
+    mkdirSync(join(root, '.git', 'refs', 'remotes', 'origin'), {
+      recursive: true,
+    });
+    mkdirSync(join(root, '.git', 'logs', 'refs', 'heads'), { recursive: true });
+    writeFileSync(join(root, '.git', 'refs', 'remotes', 'origin', 'main'), 'abc\n');
+
+    const dirs = listGitRefWatchDirs(root).map((d) => d.slice(root.length));
+    assert.ok(dirs.includes('/.git/refs'));
+    assert.ok(dirs.includes('/.git/refs/remotes'));
+    assert.ok(dirs.includes('/.git/refs/remotes/origin'));
+    assert.ok(dirs.includes('/.git/logs/refs'));
+    assert.ok(dirs.includes('/.git/logs/refs/heads'));
+  });
+});
+
 describe('watchRepo', () => {
   it('notifies on source edits and ignores node_modules', async () => {
     const root = tempRepo();
@@ -78,6 +97,37 @@ describe('watchRepo', () => {
       writeFileSync(join(root, 'src', 'a.ts'), '2');
       await delay(120);
       assert.equal(hits, 1, 'source edits must refresh');
+    } finally {
+      stop();
+    }
+  });
+
+  it('notifies when a remote-tracking base ref updates', async () => {
+    const root = tempRepo();
+    mkdirSync(join(root, 'src'), { recursive: true });
+    mkdirSync(join(root, '.git', 'refs', 'remotes', 'origin'), {
+      recursive: true,
+    });
+    writeFileSync(join(root, 'src', 'a.ts'), '1');
+    writeFileSync(join(root, '.git', 'HEAD'), 'ref: refs/heads/feature\n');
+    writeFileSync(join(root, '.git', 'index'), '');
+    writeFileSync(
+      join(root, '.git', 'refs', 'remotes', 'origin', 'main'),
+      'aaa\n',
+    );
+
+    let hits = 0;
+    const stop = watchRepo(root, () => {
+      hits += 1;
+    }, { debounceMs: 50 });
+
+    try {
+      writeFileSync(
+        join(root, '.git', 'refs', 'remotes', 'origin', 'main'),
+        'bbb\n',
+      );
+      await delay(120);
+      assert.equal(hits, 1, 'origin/main updates must refresh --base diffs');
     } finally {
       stop();
     }

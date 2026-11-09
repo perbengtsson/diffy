@@ -54,6 +54,52 @@ export type RepoWatcherOptions = {
   debounceMs?: number;
 };
 
+/** Loose git files whose updates should refresh diffs (stage, checkout, fetch). */
+export const GIT_META_WATCH_FILES = [
+  '.git/index',
+  '.git/HEAD',
+  '.git/logs/HEAD',
+  '.git/FETCH_HEAD',
+  '.git/packed-refs',
+] as const;
+
+/**
+ * Walk a directory tree and return every directory path (including root).
+ * Used for `.git/refs` watches; returns [] if the root is missing.
+ */
+export function listDirsRecursive(absRoot: string): string[] {
+  const dirs: string[] = [];
+  const walk = (absDir: string) => {
+    dirs.push(absDir);
+    let entries;
+    try {
+      entries = readdirSync(absDir, { withFileTypes: true });
+    } catch {
+      // Missing root: drop the push so callers get [].
+      if (absDir === absRoot) dirs.pop();
+      return;
+    }
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      walk(join(absDir, entry.name));
+    }
+  };
+  walk(absRoot);
+  return dirs;
+}
+
+/**
+ * Directories under `.git/refs` (and logs) to watch for branch / remote updates.
+ * Worktree watches skip `.git`, so `--base origin/main` would otherwise stay
+ * stale after the base ref moves (merge, push, fetch).
+ */
+export function listGitRefWatchDirs(repoRoot: string): string[] {
+  return [
+    ...listDirsRecursive(join(repoRoot, '.git', 'refs')),
+    ...listDirsRecursive(join(repoRoot, '.git', 'logs', 'refs')),
+  ];
+}
+
 /**
  * On Linux, recursive fs.watch registers one inotify watch per directory and
  * callback-only ignores do not skip registration. Walk the tree and watch
@@ -130,6 +176,41 @@ export function watchRepo(
     }
   };
 
+  /** Watch a `.git` path even though worktree walks skip `.git`. */
+  const watchGitPath = (abs: string, onEvent: () => void = schedule) => {
+    if (disposed || watchers.has(abs)) return;
+    try {
+      track(abs, watch(abs, onEvent));
+    } catch {
+      // ignore missing paths in edge-case repos
+    }
+  };
+
+  const watchGitRefDir = (absDir: string) => {
+    if (disposed || watchers.has(absDir)) return;
+    try {
+      const watcher = watch(absDir, (_event, filename) => {
+        if (disposed) return;
+        if (filename) {
+          const childAbs = join(absDir, filename);
+          try {
+            if (statSync(childAbs).isDirectory()) {
+              for (const dir of listDirsRecursive(childAbs)) {
+                watchGitRefDir(dir);
+              }
+            }
+          } catch {
+            // deleted or not a directory
+          }
+        }
+        schedule();
+      });
+      track(absDir, watcher);
+    } catch {
+      // ignore missing paths
+    }
+  };
+
   if (useSelectiveDirWatches()) {
     watchTree(repoRoot);
   } else {
@@ -144,14 +225,12 @@ export function watchRepo(
     }
   }
 
-  for (const rel of ['.git/index', '.git/HEAD', '.git/logs/HEAD']) {
-    const abs = join(repoRoot, rel);
-    if (watchers.has(abs)) continue;
-    try {
-      track(abs, watch(abs, schedule));
-    } catch {
-      // ignore missing paths in edge-case repos
-    }
+  for (const rel of GIT_META_WATCH_FILES) {
+    watchGitPath(join(repoRoot, rel));
+  }
+
+  for (const abs of listGitRefWatchDirs(repoRoot)) {
+    watchGitRefDir(abs);
   }
 
   return () => {
