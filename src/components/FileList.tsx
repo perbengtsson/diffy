@@ -95,8 +95,7 @@ export function FileList({
               : file
                 ? isEditedFile(file)
                 : false;
-          const rawLabel =
-            row.node.kind === 'dir' ? `${row.node.name}/` : row.node.name;
+          const rawLabel = row.node.name;
           // Dirs keep medium ⏵/⏷ fold markers; Nerd Font glyphs are for files only.
           const treeIcon =
             icons && row.node.kind === 'file'
