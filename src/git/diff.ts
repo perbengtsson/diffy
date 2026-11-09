@@ -154,63 +154,82 @@ function mergeWithTrackedFiles(
   return files;
 }
 
+function collectDiffGitPaths(rawDiff: string): string[] {
+  const paths: string[] = [];
+  for (const line of rawDiff.split('\n')) {
+    if (!line.startsWith('diff --git ')) continue;
+    const match = line.match(/^diff --git a\/(.+?) b\/(.+)$/);
+    if (match) paths.push(match[2] ?? match[1] ?? '');
+  }
+  return paths;
+}
+
+function diffFileEntry(
+  path: string,
+  rawDiff: string,
+  status?: FileStatus,
+): DiffFile | null {
+  if (!rawDiff.trim()) return null;
+  const stats = countStats(rawDiff);
+  return {
+    path,
+    status: status ?? statusFromDiff(rawDiff),
+    additions: stats.additions,
+    deletions: stats.deletions,
+    rawDiff,
+    isBinary: isBinaryDiff(rawDiff),
+  };
+}
+
 async function getUncommittedFiles(
   repoRoot: string,
   stagedOnly: boolean,
 ): Promise<DiffFile[]> {
-  const fileMap = new Map<string, { staged?: string; unstaged?: string; untracked?: boolean }>();
+  // Single coherent diff (HEAD→worktree or index), never concatenate staged+unstaged:
+  // a committed/staged add later removed in the worktree must net out, not stay green.
+  const fileMap = new Map<string, { tracked?: boolean; untracked?: boolean }>();
 
-  if (!stagedOnly) {
-    const unstagedOut = await gitDiffOutput(['diff', '--name-only'], repoRoot);
-    for (const p of unstagedOut.split('\n').filter(Boolean)) {
-      fileMap.set(p, { ...(fileMap.get(p) ?? {}), unstaged: p });
+  if (stagedOnly) {
+    const stagedOut = await gitDiffOutput(
+      ['diff', '--cached', '--name-only'],
+      repoRoot,
+    );
+    for (const p of stagedOut.split('\n').filter(Boolean)) {
+      fileMap.set(p, { tracked: true });
+    }
+  } else {
+    const dirtyOut = await gitDiffOutput(['diff', 'HEAD', '--name-only'], repoRoot);
+    for (const p of dirtyOut.split('\n').filter(Boolean)) {
+      fileMap.set(p, { tracked: true });
     }
     for (const p of await listUntracked(repoRoot)) {
       fileMap.set(p, { ...(fileMap.get(p) ?? {}), untracked: true });
     }
   }
 
-  const stagedOut = await gitDiffOutput(['diff', '--cached', '--name-only'], repoRoot);
-  for (const p of stagedOut.split('\n').filter(Boolean)) {
-    fileMap.set(p, { ...(fileMap.get(p) ?? {}), staged: p });
-  }
-
   const files: DiffFile[] = [];
   for (const [path, entry] of fileMap) {
-    if (stagedOnly && !entry.staged) continue;
-
     let rawDiff = '';
     if (entry.untracked) {
       rawDiff = await diffUntrackedFile(repoRoot, path);
+    } else if (stagedOnly) {
+      rawDiff = await gitDiffOutput(
+        ['diff', '-U' + String(CONTEXT_LINES), '--cached', '--', path],
+        repoRoot,
+      );
     } else {
-      const parts: string[] = [];
-      if (entry.staged) {
-        const staged = await gitDiffOutput(
-          ['diff', '-U' + String(CONTEXT_LINES), '--cached', '--', path],
-          repoRoot,
-        );
-        if (staged) parts.push(staged);
-      }
-      if (entry.unstaged && !stagedOnly) {
-        const unstaged = await gitDiffOutput(
-          ['diff', '-U' + String(CONTEXT_LINES), '--', path],
-          repoRoot,
-        );
-        if (unstaged) parts.push(unstaged);
-      }
-      rawDiff = parts.join('\n');
+      rawDiff = await gitDiffOutput(
+        ['diff', '-U' + String(CONTEXT_LINES), 'HEAD', '--', path],
+        repoRoot,
+      );
     }
 
-    const stats = countStats(rawDiff);
-    const binary = isBinaryDiff(rawDiff);
-    files.push({
+    const file = diffFileEntry(
       path,
-      status: entry.untracked ? 'untracked' : statusFromDiff(rawDiff),
-      additions: stats.additions,
-      deletions: stats.deletions,
       rawDiff,
-      isBinary: binary,
-    });
+      entry.untracked ? 'untracked' : undefined,
+    );
+    if (file) files.push(file);
   }
 
   files.sort((a, b) => a.path.localeCompare(b.path));
@@ -222,62 +241,56 @@ async function getBaseDiffFiles(
   base: string,
   includeUncommitted: boolean,
 ): Promise<DiffFile[]> {
+  // With --include-uncommitted, show the net review diff (merge-base → worktree)
+  // instead of concatenating base...HEAD + staged + unstaged. Concatenation made
+  // additions that were later removed still appear as green adds (#10).
+  if (includeUncommitted) {
+    const mergeBase = (
+      await gitOrThrow(['merge-base', base, 'HEAD'], repoRoot)
+    ).trim();
+    const untracked = new Set(await listUntracked(repoRoot));
+    const nameOut = await gitDiffOutput(
+      ['diff', '--name-only', mergeBase],
+      repoRoot,
+    );
+    const filePaths = new Set<string>([
+      ...nameOut.split('\n').filter(Boolean),
+      ...untracked,
+    ]);
+
+    const files: DiffFile[] = [];
+    for (const path of [...filePaths].sort()) {
+      let rawDiff = '';
+      let status: FileStatus | undefined;
+      if (untracked.has(path)) {
+        rawDiff = await diffUntrackedFile(repoRoot, path);
+        status = 'untracked';
+      } else {
+        rawDiff = await gitDiffOutput(
+          ['diff', '-U' + String(CONTEXT_LINES), mergeBase, '--', path],
+          repoRoot,
+        );
+      }
+      const file = diffFileEntry(path, rawDiff, status);
+      if (file) files.push(file);
+    }
+    return files;
+  }
+
   const committedDiff = await gitDiffOutput(
     ['diff', '-U' + String(CONTEXT_LINES), `${base}...HEAD`],
     repoRoot,
   );
 
-  const filePaths = new Set<string>();
-  for (const line of committedDiff.split('\n')) {
-    if (line.startsWith('diff --git ')) {
-      const match = line.match(/^diff --git a\/(.+?) b\/(.+)$/);
-      if (match) filePaths.add(match[2] ?? match[1] ?? '');
-    }
-  }
-
-  if (includeUncommitted) {
-    const uncommitted = await getUncommittedFiles(repoRoot, false);
-    for (const f of uncommitted) filePaths.add(f.path);
-  }
-
+  const filePaths = new Set(collectDiffGitPaths(committedDiff));
   const files: DiffFile[] = [];
   for (const path of [...filePaths].sort()) {
-    let rawDiff = '';
-    const committedPart = await gitDiffOutput(
+    const rawDiff = await gitDiffOutput(
       ['diff', '-U' + String(CONTEXT_LINES), `${base}...HEAD`, '--', path],
       repoRoot,
     );
-    rawDiff = committedPart;
-
-    if (includeUncommitted) {
-      const staged = await gitDiffOutput(
-        ['diff', '-U' + String(CONTEXT_LINES), '--cached', '--', path],
-        repoRoot,
-      );
-      const unstaged = await gitDiffOutput(
-        ['diff', '-U' + String(CONTEXT_LINES), '--', path],
-        repoRoot,
-      );
-      const parts = [rawDiff, staged, unstaged].filter(Boolean);
-      rawDiff = parts.join('\n');
-
-      const isUntracked = (await listUntracked(repoRoot)).includes(path);
-      if (isUntracked && !rawDiff) {
-        rawDiff = await diffUntrackedFile(repoRoot, path);
-      }
-    }
-
-    if (!rawDiff.trim()) continue;
-
-    const stats = countStats(rawDiff);
-    files.push({
-      path,
-      status: statusFromDiff(rawDiff),
-      additions: stats.additions,
-      deletions: stats.deletions,
-      rawDiff,
-      isBinary: isBinaryDiff(rawDiff),
-    });
+    const file = diffFileEntry(path, rawDiff);
+    if (file) files.push(file);
   }
 
   return files;
